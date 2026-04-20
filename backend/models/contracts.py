@@ -1,17 +1,16 @@
 from typing import Any, Literal
-
 from pydantic import BaseModel, Field
 
 
 CampaignStatus = Literal[
-    "PREPARACAO",
-    "SEGMENTACAO",
-    "ATIVACAO",
-    "ATIVO",
-    "PAUSADO",
-    "CONCLUIDO",
-    "ENCERRADO",
-    "CANCELADO",
+    'PREPARACAO',
+    'SEGMENTACAO',
+    'ATIVACAO',
+    'ATIVO',
+    'PAUSADO',
+    'CONCLUIDO',
+    'ENCERRADO',
+    'CANCELADO',
 ]
 
 
@@ -22,7 +21,7 @@ class CampaignCreate(BaseModel):
     strategy: str
     start_date: str
     end_date: str
-    periodicity: Literal["DIARIA", "SEMANAL", "MENSAL", "PONTUAL"]
+    periodicity: Literal['DIARIA', 'SEMANAL', 'MENSAL', 'PONTUAL']
     max_impacts_month: int = 1
     control_group_enabled: bool = True
     description: str | None = None
@@ -43,7 +42,7 @@ class RuleCondition(BaseModel):
     field: str
     operator: str
     value: Any
-    logical_connector: Literal["AND", "OR"] = "AND"
+    logical_connector: Literal['AND', 'OR'] = 'AND'
 
 
 class RuleGroup(BaseModel):
@@ -64,8 +63,8 @@ class StatusChangePayload(BaseModel):
 
 
 class ActivationPayload(BaseModel):
-    materialization_mode: Literal["TABLE", "VIEW"] = "TABLE"
-    execution_mode: Literal["PREVIEW", "RUN"] = "RUN"
+    materialization_mode: Literal['TABLE', 'VIEW', 'MATERIALIZED_VIEW'] = 'TABLE'
+    execution_mode: Literal['PREVIEW', 'RUN'] = 'RUN'
     effective_start_date: str
     effective_end_date: str
 

@@ -55,8 +55,8 @@ topics:
             label: Frequência transacional
             type: string
             operators: [EQUALS, IN]
-          - field: propensao_credito
-            label: Propensão a crédito
+          - field: propensao_investimento
+            label: Propensão a investimento
             type: number
             operators: [GT, GTE, LT, LTE]
 universe_views:

@@ -1,3 +1,4 @@
+CREATE CATALOG IF NOT EXISTS main;
 CREATE SCHEMA IF NOT EXISTS main.campaign_app;
 
 CREATE TABLE IF NOT EXISTS main.campaign_app.campaign_header (

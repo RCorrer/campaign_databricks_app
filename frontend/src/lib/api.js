@@ -1,15 +1,19 @@
 export async function apiGet(path) {
   const response = await fetch(path)
-  if (!response.ok) throw new Error('Erro ao carregar dados')
+  if (!response.ok) {
+    throw new Error(`Erro ${response.status}`)
+  }
   return response.json()
 }
 
-export async function apiSend(path, method, body) {
+export async function apiSend(path, method = 'POST', payload) {
   const response = await fetch(path, {
     method,
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
+    body: payload ? JSON.stringify(payload) : undefined
   })
-  if (!response.ok) throw new Error('Erro na requisição')
+  if (!response.ok) {
+    throw new Error(`Erro ${response.status}`)
+  }
   return response.json()
 }

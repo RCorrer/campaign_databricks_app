@@ -1,21 +1,42 @@
+CREATE CATALOG IF NOT EXISTS main;
+CREATE SCHEMA IF NOT EXISTS main.campaign_app;
+
 CREATE OR REPLACE VIEW main.campaign_app.vw_campaign_current_definition AS
 SELECT
-  h.campaign_id,
-  h.campaign_name,
-  h.status,
-  h.start_date,
-  h.end_date,
-  h.current_version,
-  b.challenge,
-  b.target_business_outcome,
-  s.universe_view,
-  a.activation_object_name,
-  a.effective_start_date,
-  a.effective_end_date
-FROM main.campaign_app.campaign_header h
-LEFT JOIN main.campaign_app.campaign_briefing_version b
-  ON h.campaign_id = b.campaign_id AND h.current_version = b.version_id
-LEFT JOIN main.campaign_app.campaign_segmentation_version s
-  ON h.campaign_id = s.campaign_id AND h.current_version = s.version_id
-LEFT JOIN main.campaign_app.campaign_activation_version a
-  ON h.campaign_id = a.campaign_id AND h.current_version = a.version_id;
+  header.campaign_id,
+  header.campaign_name,
+  header.theme,
+  header.objective,
+  header.strategy,
+  header.status,
+  header.periodicity,
+  header.start_date,
+  header.end_date,
+  header.max_impacts_month,
+  header.control_group_enabled,
+  header.current_version,
+  briefing.challenge,
+  briefing.target_business_outcome,
+  briefing.channels,
+  briefing.constraints,
+  briefing.business_rules,
+  briefing.notes,
+  segmentation.universe_view,
+  segmentation.include_rules_json,
+  segmentation.exclude_rules_json,
+  segmentation.preview_sql,
+  activation.materialization_mode,
+  activation.activation_object_name,
+  activation.activation_sql,
+  activation.effective_start_date,
+  activation.effective_end_date
+FROM main.campaign_app.campaign_header header
+LEFT JOIN main.campaign_app.campaign_briefing_version briefing
+  ON header.campaign_id = briefing.campaign_id
+  AND header.current_version = briefing.version_id
+LEFT JOIN main.campaign_app.campaign_segmentation_version segmentation
+  ON header.campaign_id = segmentation.campaign_id
+  AND header.current_version = segmentation.version_id
+LEFT JOIN main.campaign_app.campaign_activation_version activation
+  ON header.campaign_id = activation.campaign_id
+  AND header.current_version = activation.version_id;
