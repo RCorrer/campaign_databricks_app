@@ -1,4 +1,5 @@
-import { Link, useState } from 'react-router-dom'
+import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import RuleGroupCard from '../components/RuleGroupCard'
 
 export default function SegmentationPage({ campaign, topics }) {
