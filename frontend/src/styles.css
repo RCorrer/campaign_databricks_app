@@ -1,0 +1,137 @@
+:root {
+  font-family: Inter, Arial, sans-serif;
+  color: #e8eefc;
+  background: #0b1220;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  background: linear-gradient(180deg, #0b1220 0%, #111b31 100%);
+}
+
+.page {
+  padding: 24px;
+}
+
+.hero-card, .stage-card {
+  background: rgba(14, 24, 44, 0.88);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 18px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+}
+
+.hero-card {
+  padding: 24px;
+  display: flex;
+  gap: 24px;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #7dd3fc;
+  font-size: 12px;
+}
+
+.muted {
+  color: #cbd5e1;
+  max-width: 800px;
+}
+
+.hero-metrics {
+  display: grid;
+  gap: 12px;
+  min-width: 240px;
+}
+
+.hero-metrics div {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(30, 41, 59, 0.8);
+}
+
+.grid {
+  margin-top: 20px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 18px;
+}
+
+.stage-card {
+  padding: 18px;
+}
+
+.stage-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.badge {
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(56, 189, 248, 0.16);
+  color: #7dd3fc;
+  font-size: 12px;
+}
+
+.tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.tab {
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: transparent;
+  color: #e8eefc;
+  border-radius: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+}
+
+.tab.active {
+  background: #2563eb;
+  border-color: #2563eb;
+}
+
+.panel, .rule-box, .topic-item, .timeline-item {
+  background: rgba(15, 23, 42, 0.92);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 14px;
+  padding: 12px;
+}
+
+.rule-box, .topic-item, .timeline-item {
+  margin-top: 10px;
+}
+
+.topic-list, .timeline {
+  display: grid;
+  gap: 10px;
+}
+
+pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: #020617;
+  color: #dbeafe;
+  padding: 14px;
+  border-radius: 12px;
+  overflow-x: auto;
+}

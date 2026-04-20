@@ -1,0 +1,65 @@
+topics:
+  - key: elegibilidade
+    label: Elegibilidade
+    description: Regras ligadas à elegibilidade de produtos e ofertas.
+    entities:
+      - entity: vw_elegibilidade_cliente
+        label: Elegibilidade do cliente
+        join_key: cpf_cnpj
+        fields:
+          - field: produto
+            label: Produto elegível
+            type: string
+            operators: [EQUALS, NOT_EQUALS, IN, NOT_IN, CONTAINS]
+          - field: status_elegibilidade
+            label: Status de elegibilidade
+            type: string
+            operators: [EQUALS, NOT_EQUALS, IN, NOT_IN]
+          - field: limite_pre_aprovado
+            label: Limite pré-aprovado
+            type: number
+            operators: [GT, GTE, LT, LTE]
+  - key: relacionamento
+    label: Relacionamento
+    description: Informações de vínculo do cliente com o banco.
+    entities:
+      - entity: vw_relacionamento_cliente
+        label: Relacionamento do cliente
+        join_key: cpf_cnpj
+        fields:
+          - field: segmento
+            label: Segmento
+            type: string
+            operators: [EQUALS, IN, NOT_IN]
+          - field: tempo_relacionamento_meses
+            label: Tempo de relacionamento em meses
+            type: number
+            operators: [GT, GTE, LT, LTE]
+          - field: status_conta
+            label: Status da conta
+            type: string
+            operators: [EQUALS, IN, NOT_IN]
+  - key: comportamento
+    label: Comportamento
+    description: Indicadores comportamentais e transacionais.
+    entities:
+      - entity: vw_comportamento_financeiro
+        label: Comportamento financeiro
+        join_key: cpf_cnpj
+        fields:
+          - field: ticket_medio_6m
+            label: Ticket médio 6 meses
+            type: number
+            operators: [GT, GTE, LT, LTE]
+          - field: frequencia_transacional
+            label: Frequência transacional
+            type: string
+            operators: [EQUALS, IN]
+          - field: propensao_credito
+            label: Propensão a crédito
+            type: number
+            operators: [GT, GTE, LT, LTE]
+universe_views:
+  - vw_universo_cartoes_ativos
+  - vw_universo_clientes_varejo
+  - vw_universo_investimentos
