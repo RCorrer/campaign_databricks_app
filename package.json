@@ -4,8 +4,9 @@
   "version": "2.0.0",
   "type": "module",
   "scripts": {
-    "dev": "node ./node_modules/vite/bin/vite.js --config vite.config.js",
-    "build": "node ./node_modules/vite/bin/vite.js build --config vite.config.js"
+    "dev": "vite --config vite.config.js",
+    "build": "vite build --config vite.config.js",
+    "postinstall": "chmod +x node_modules/.bin/vite node_modules/esbuild/bin/esbuild node_modules/@esbuild/linux-x64/bin/esbuild 2>/dev/null || true"
   },
   "dependencies": {
     "react": "^18.3.1",
