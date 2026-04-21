@@ -99,3 +99,10 @@ npm run build
 pip install -r requirements.txt
 uvicorn main:app --host 0.0.0.0 --port 8000
 ```
+
+
+## Acessos do Databricks App
+
+- Arquivo de grants: `sql/08_app_grants.sql`
+- Guia rápido: `docs/app_access.md`
+- Substitua `<APP_SERVICE_PRINCIPAL>` pelo principal exato do app antes de executar o SQL.
