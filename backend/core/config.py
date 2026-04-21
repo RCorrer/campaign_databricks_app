@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     campaign_source_schema: str = 'campaign_sources'
     campaign_execution_schema: str = 'campaign_execution'
     campaign_mapping_file: str = 'config/semantic_mapping.yaml'
-    dist_dir: str = 'dist'
+    frontend_dir: str = 'frontend'
 
     @property
     def metadata_namespace(self) -> str:
