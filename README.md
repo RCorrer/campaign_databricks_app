@@ -1,24 +1,28 @@
-# Campaign Orchestrator
+# Campaign Databricks App
 
-Aplicação web para Databricks Apps com frontend React e backend FastAPI.
+Aplicação CRM inspirada em Salesforce Data Cloud / CDP para execução dentro de Databricks Apps.
 
-## Estrutura principal
+## Arquitetura funcional
 
-- `frontend/index.html`: entrada do Vite
-- `frontend/src/pages`: páginas separadas por etapa
-- `backend/api/routes.py`: rotas HTTP
-- `backend/services/campaign_service.py`: regras de negócio e dados demo
-- `backend/services/query_builder.py`: geração do SQL de segmentação
-- `config/semantic_mapping.yaml`: arquivo de/para
-- `sql/00_catalogs_and_schemas.sql`: criação do catálogo e schemas
-- `sql/01_campaign_app_tables.sql`: tabelas Delta de metadados da aplicação
-- `sql/02_customer_base_tables.sql`: base mestre de clientes
-- `sql/03_customer_360_tables.sql`: 10 tabelas 360 de negócio
-- `sql/04_seed_customer_data.sql`: massa de dados compatível entre todas as tabelas
-- `sql/05_campaign_sources_views.sql`: views de universo inicial e view enriquecida
-- `sql/06_business_contracts.sql`: view consolidada da definição atual da campanha
+A segmentação segue este fluxo:
 
-## Ordem de execução dos arquivos SQL
+1. o usuário escolhe um **público inicial** em `main.campaign_sources`
+2. aplica **filtros nativos** sobre campos da própria view inicial
+3. aplica **cruzamentos temáticos** com tabelas de `main.customer_360` por `cpf_cnpj`
+4. o resultado final materializa somente os `cpf_cnpj` elegíveis em `main.campaign_execution`
+5. os metadados e versões ficam em `main.campaign_app`
+
+## Schemas
+
+- `main.campaign_app`: metadados, briefing, segmentação, ativação, histórico
+- `main.customer_base`: base mestre de clientes
+- `main.customer_360`: bases temáticas para cruzamento
+- `main.campaign_sources`: views de público inicial
+- `main.campaign_execution`: audiência final e log de execução
+
+## Ordem de execução dos SQLs
+
+Execute exatamente nesta ordem:
 
 1. `sql/00_catalogs_and_schemas.sql`
 2. `sql/01_campaign_app_tables.sql`
@@ -26,25 +30,72 @@ Aplicação web para Databricks Apps com frontend React e backend FastAPI.
 4. `sql/03_customer_360_tables.sql`
 5. `sql/04_seed_customer_data.sql`
 6. `sql/05_campaign_sources_views.sql`
-7. `sql/06_business_contracts.sql`
+7. `sql/06_campaign_execution_tables.sql`
+8. `sql/07_business_contracts.sql`
 
-## Build do frontend
+## O que cada etapa cria
+
+### 1. `00_catalogs_and_schemas.sql`
+Cria o catálogo `main` e os schemas do projeto.
+
+### 2. `01_campaign_app_tables.sql`
+Cria as tabelas de metadados da aplicação.
+
+### 3. `02_customer_base_tables.sql`
+Cria a tabela mestre `main.customer_base.customer_master`.
+
+### 4. `03_customer_360_tables.sql`
+Cria as 10 tabelas temáticas de CRM e banking:
+- contas
+- saldos
+- cartões
+- gastos de cartão
+- investimentos
+- elegibilidade
+- perfil de crédito
+- empréstimos
+- canais digitais
+- seguros
+
+### 5. `04_seed_customer_data.sql`
+Insere massa de dados consistente entre todas as tabelas usando os mesmos `cpf_cnpj`.
+
+### 6. `05_campaign_sources_views.sql`
+Cria as views de público inicial:
+- `vw_publico_base_clientes`
+- `vw_publico_prime`
+- `vw_publico_exclusive`
+- `vw_publico_pj`
+- `vw_publico_varejo`
+- `vw_publico_jovem_digital`
+
+### 7. `06_campaign_execution_tables.sql`
+Cria as tabelas de execução:
+- `campaign_audience`
+- `campaign_run_log`
+
+### 8. `07_business_contracts.sql`
+Cria a view consolidada `vw_campaign_current_definition`.
+
+## Arquivos principais para configuração do app
+
+- `config/semantic_mapping.yaml`: catálogo do builder no-code
+- `backend/core/config.py`: namespaces e configurações do app
+- `backend/services/query_builder.py`: geração do SQL da segmentação
+- `backend/services/campaign_service.py`: fluxo da campanha e SQL de ativação
+- `frontend/src/pages/SegmentationPage.jsx`: tela de segmentação
+- `frontend/src/pages/ActivationPage.jsx`: tela de ativação
+
+## Build local
 
 ```bash
 npm install
 npm run build
 ```
 
-## Backend
+## Backend local
 
 ```bash
 pip install -r requirements.txt
 uvicorn main:app --host 0.0.0.0 --port 8000
 ```
-
-## Observações
-
-- O `index.html` fica dentro de `frontend/`.
-- O build gera a pasta `dist/` na raiz do projeto.
-- O SQL usa o padrão Databricks com nomes completos `catalog.schema.table`.
-- As views em `main.campaign_sources` já trazem os campos necessários para o builder no-code do protótipo.

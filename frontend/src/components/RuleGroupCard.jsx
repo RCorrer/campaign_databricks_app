@@ -8,10 +8,11 @@ export default function RuleGroupCard({ group, index }) {
       <div className="rule-list">
         {group.conditions.map((condition, conditionIndex) => (
           <div key={conditionIndex} className="rule-line">
-            <span>{condition.topic_label || condition.topic}</span>
-            <strong>{condition.field_label || condition.field}</strong>
+            <span>{condition.source_scope === 'THEMATIC' ? (condition.theme || 'Tema') : 'Público inicial'}</span>
+            <strong>{condition.field}</strong>
             <span>{condition.operator}</span>
             <code>{Array.isArray(condition.value) ? condition.value.join(', ') : String(condition.value)}</code>
+            {condition.entity ? <small className="muted">{condition.entity}</small> : null}
           </div>
         ))}
       </div>

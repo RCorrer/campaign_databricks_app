@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 from backend.core.config import settings
-from backend.models.contracts import RuleGroup, SegmentationPayload
+from backend.models.contracts import RuleCondition, RuleGroup, SegmentationPayload
+from backend.utils.mapping_loader import load_semantic_mapping
 
 
 OPERATOR_SQL = {
@@ -16,49 +19,74 @@ OPERATOR_SQL = {
 
 
 class QueryBuilderService:
-    def build_where_clause(self, groups: list[RuleGroup], default_alias: str = 'base') -> str:
-        if not groups:
-            return '1 = 1'
-
-        group_fragments: list[str] = []
-        for group in groups:
-            conditions: list[str] = []
-            for condition in group.conditions:
-                alias = default_alias
-                operator = OPERATOR_SQL.get(condition.operator, '=')
-                value = self._format_value(condition.value, condition.operator)
-                conditions.append(f"{alias}.{condition.field} {operator} {value}")
-            if conditions:
-                group_fragments.append('(' + ' AND '.join(conditions) + ')')
-        return ' OR '.join(group_fragments) if group_fragments else '1 = 1'
+    def __init__(self):
+        self.mapping = load_semantic_mapping(settings.campaign_mapping_file)
 
     def build_preview_sql(self, segmentation: SegmentationPayload) -> str:
-        source_view = f"{settings.source_namespace}.{segmentation.universe_view}"
-        include_clause = self.build_where_clause(segmentation.include_groups)
-        exclude_clause = self.build_where_clause(segmentation.exclude_groups)
+        source_view = segmentation.universe_view
+        native_include_clause = self._build_native_clause(segmentation.native_include_groups, default_true=True)
+        native_exclude_clause = self._build_native_clause(segmentation.native_exclude_groups, default_true=False)
+        include_thematic_clause = self._build_thematic_clause(segmentation.include_groups, default_true=True)
+        exclude_thematic_clause = self._build_thematic_clause(segmentation.exclude_groups, default_true=False)
 
         return f"""
-WITH universo_inicial AS (
-    SELECT base.cpf_cnpj
+WITH publico_inicial AS (
+    SELECT DISTINCT base.*
     FROM {source_view} base
 ),
-publico_incluido AS (
-    SELECT base.cpf_cnpj
-    FROM universo_inicial universo
-    INNER JOIN {source_view} base
-        ON universo.cpf_cnpj = base.cpf_cnpj
-    WHERE {include_clause}
-),
-publico_final AS (
-    SELECT incluido.cpf_cnpj
-    FROM publico_incluido incluido
-    LEFT JOIN {source_view} base
-        ON incluido.cpf_cnpj = base.cpf_cnpj
-    WHERE NOT ({exclude_clause})
+publico_filtrado AS (
+    SELECT DISTINCT base.cpf_cnpj
+    FROM publico_inicial base
+    WHERE {native_include_clause}
+      AND NOT ({native_exclude_clause})
+      AND {include_thematic_clause}
+      AND NOT ({exclude_thematic_clause})
 )
-SELECT DISTINCT cpf_cnpj
-FROM publico_final
+SELECT cpf_cnpj
+FROM publico_filtrado
 """.strip()
+
+    def _build_native_clause(self, groups: list[RuleGroup], default_true: bool) -> str:
+        if not groups:
+            return '1 = 1' if default_true else '1 = 0'
+        fragments = [self._build_group_expression(group, alias='base') for group in groups if group.conditions]
+        if not fragments:
+            return '1 = 1' if default_true else '1 = 0'
+        return '(' + ' OR '.join(fragments) + ')'
+
+    def _build_thematic_clause(self, groups: list[RuleGroup], default_true: bool) -> str:
+        if not groups:
+            return '1 = 1' if default_true else '1 = 0'
+        fragments = [self._build_exists_expression(group) for group in groups if group.conditions]
+        if not fragments:
+            return '1 = 1' if default_true else '1 = 0'
+        return '(' + ' OR '.join(fragments) + ')'
+
+    def _build_group_expression(self, group: RuleGroup, alias: str) -> str:
+        condition_sql: list[str] = []
+        for index, condition in enumerate(group.conditions):
+            connector = '' if index == 0 else f" {condition.logical_connector} "
+            operator = OPERATOR_SQL.get(condition.operator, '=')
+            value = self._format_value(condition.value, condition.operator)
+            condition_sql.append(f"{connector}{alias}.{condition.field} {operator} {value}")
+        return '(' + ''.join(condition_sql) + ')'
+
+    def _build_exists_expression(self, group: RuleGroup) -> str:
+        first = group.conditions[0]
+        entity = first.entity or self._resolve_theme_table(first.theme)
+        conditions_sql: list[str] = []
+        for index, condition in enumerate(group.conditions):
+            connector = '' if index == 0 else f" {condition.logical_connector} "
+            operator = OPERATOR_SQL.get(condition.operator, '=')
+            value = self._format_value(condition.value, condition.operator)
+            conditions_sql.append(f"{connector}theme.{condition.field} {operator} {value}")
+        return f"EXISTS (SELECT 1 FROM {entity} theme WHERE theme.cpf_cnpj = base.cpf_cnpj AND ({''.join(conditions_sql)}))"
+
+    def _resolve_theme_table(self, theme_key: str | None) -> str:
+        for theme in self.mapping.get('themes', []):
+            if theme.get('key') == theme_key:
+                return theme['table']
+        raise ValueError(f'Tema não mapeado: {theme_key}')
 
     def _format_value(self, value, operator: str) -> str:
         if operator in {'IN', 'NOT_IN'} and isinstance(value, list):
@@ -69,6 +97,8 @@ FROM publico_final
         return self._quote(value)
 
     def _quote(self, value) -> str:
+        if isinstance(value, bool):
+            return 'true' if value else 'false'
         if isinstance(value, (int, float)):
             return str(value)
         if value is None:

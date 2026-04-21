@@ -8,7 +8,7 @@ import ActivationPage from './pages/ActivationPage'
 import FlowPage from './pages/FlowPage'
 import { apiGet, apiSend } from './lib/api'
 
-function CampaignRoute({ campaigns, topics, page }) {
+function CampaignRoute({ campaigns, builderCatalog, page }) {
   const { campaignId } = useParams()
   const campaign = campaigns.find((item) => item.campaign_id === campaignId)
 
@@ -21,7 +21,7 @@ function CampaignRoute({ campaigns, topics, page }) {
   }
 
   if (page === 'segmentation') {
-    return <SegmentationPage campaign={campaign} topics={topics} />
+    return <SegmentationPage campaign={campaign} builderCatalog={builderCatalog} />
   }
 
   return <ActivationPage campaign={campaign} />
@@ -29,7 +29,7 @@ function CampaignRoute({ campaigns, topics, page }) {
 
 export default function App() {
   const [campaigns, setCampaigns] = useState([])
-  const [topics, setTopics] = useState([])
+  const [builderCatalog, setBuilderCatalog] = useState({ initial_audiences: [], native_fields: [], themes: [] })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -45,9 +45,9 @@ export default function App() {
         await apiSend('/api/demo/bootstrap', 'POST')
         list = await apiGet('/api/campaigns')
       }
-      const topicData = await apiGet('/api/catalog/topics')
+      const catalogData = await apiGet('/api/catalog/segmentation-builder')
       setCampaigns(list)
-      setTopics(topicData.topics || [])
+      setBuilderCatalog(catalogData || { initial_audiences: [], native_fields: [], themes: [] })
     } catch (bootstrapError) {
       setError('Não foi possível carregar a aplicação.')
     } finally {
@@ -68,9 +68,9 @@ export default function App() {
       <Routes>
         <Route path="/" element={<DashboardPage campaigns={campaigns} />} />
         <Route path="/flow" element={<FlowPage />} />
-        <Route path="/campaigns/:campaignId/preparation" element={<CampaignRoute campaigns={campaigns} topics={topics} page="preparation" />} />
-        <Route path="/campaigns/:campaignId/segmentation" element={<CampaignRoute campaigns={campaigns} topics={topics} page="segmentation" />} />
-        <Route path="/campaigns/:campaignId/activation" element={<CampaignRoute campaigns={campaigns} topics={topics} page="activation" />} />
+        <Route path="/campaigns/:campaignId/preparation" element={<CampaignRoute campaigns={campaigns} builderCatalog={builderCatalog} page="preparation" />} />
+        <Route path="/campaigns/:campaignId/segmentation" element={<CampaignRoute campaigns={campaigns} builderCatalog={builderCatalog} page="segmentation" />} />
+        <Route path="/campaigns/:campaignId/activation" element={<CampaignRoute campaigns={campaigns} builderCatalog={builderCatalog} page="activation" />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Layout>

@@ -1,4 +1,3 @@
--- Limpeza opcional para ambiente de demonstração
 DELETE FROM main.customer_360.tb_seguro_produtos;
 DELETE FROM main.customer_360.tb_canais_digitais;
 DELETE FROM main.customer_360.tb_emprestimos;
@@ -12,18 +11,18 @@ DELETE FROM main.customer_360.tb_contas;
 DELETE FROM main.customer_base.customer_master;
 
 INSERT INTO main.customer_base.customer_master VALUES
-('11111111111','PF','Ana Martins','Ana','1988-03-12','F','CASADA','Gerente Comercial',12500.00,'Curitiba','PR','VAREJO_ALTA_RENDA','2018-06-15','APROVADO',true,'BAIXO'),
-('22222222222','PF','Bruno Almeida','Bruno','1992-07-22','M','SOLTEIRO','Engenheiro de Software',8900.00,'São Paulo','SP','VAREJO_MEDIA_RENDA','2020-01-10','APROVADO',true,'BAIXO'),
-('33333333333','PF','Carla Souza','Carla','1979-11-05','F','DIVORCIADA','Médica',21800.00,'Belo Horizonte','MG','PRIVATE','2016-09-01','APROVADO',true,'BAIXO'),
-('44444444444','PF','Diego Lima','Diego','1985-04-18','M','CASADO','Empresário',15600.00,'Porto Alegre','RS','ALTA_RENDA','2017-02-20','APROVADO',false,'MEDIO'),
-('55555555555','PF','Eduarda Rocha','Duda','1995-12-02','F','SOLTEIRA','Analista Financeira',6200.00,'Curitiba','PR','VAREJO_MEDIA_RENDA','2021-08-11','APROVADO',true,'BAIXO'),
-('66666666666','PF','Felipe Santos','Felipe','1990-09-30','M','CASADO','Professor',4800.00,'Campinas','SP','VAREJO','2019-03-27','APROVADO',true,'MEDIO'),
-('77777777777','PF','Gabriela Nunes','Gabi','1987-01-14','F','CASADA','Arquiteta',14300.00,'Rio de Janeiro','RJ','ALTA_RENDA','2015-05-09','APROVADO',true,'BAIXO'),
-('88888888888','PF','Henrique Costa','Henrique','1983-06-08','M','CASADO','Advogado',9800.00,'Florianópolis','SC','VAREJO_MEDIA_RENDA','2018-10-03','APROVADO',false,'BAIXO'),
-('99999999999','PF','Isabela Freitas','Isa','1998-02-17','F','SOLTEIRA','Designer',3500.00,'Recife','PE','MASSIFICADO','2023-04-19','APROVADO',true,'MEDIO'),
-('10101010101','PF','João Pedro Ribeiro','João','1975-08-25','M','CASADO','Consultor',17200.00,'Brasília','DF','ALTA_RENDA','2014-12-12','APROVADO',true,'BAIXO'),
-('11122233344','PJ','Mercado Bom Preço LTDA','Bom Preço',NULL,NULL,NULL,'Comércio Varejista',65000.00,'Curitiba','PR','EMPRESAS','2019-11-01','APROVADO',true,'MEDIO'),
-('55566677788','PJ','Tech Prime Serviços LTDA','Tech Prime',NULL,NULL,NULL,'Serviços de Tecnologia',92000.00,'São Paulo','SP','EMPRESAS','2017-07-07','APROVADO',true,'BAIXO');
+('11111111111','PF','Ana Martins','Ana','1988-03-12','F','CASADA','Gerente Comercial',12500.00,'ALTA','Curitiba','PR','80000-000','PRIME','PRIME_ESSENCIAL','2018-06-15','APROVADO',true,'BAIXO'),
+('22222222222','PF','Bruno Almeida','Bruno','1992-07-22','M','SOLTEIRO','Engenheiro de Software',8900.00,'MEDIA','São Paulo','SP','04500-000','VAREJO','DIGITAL','2020-01-10','APROVADO',true,'BAIXO'),
+('33333333333','PF','Carla Souza','Carla','1979-11-05','F','DIVORCIADA','Médica',21800.00,'ALTA','Belo Horizonte','MG','30100-000','EXCLUSIVE','PRIVATE','2016-09-01','APROVADO',true,'BAIXO'),
+('44444444444','PF','Diego Lima','Diego','1985-04-18','M','CASADO','Empresário',15600.00,'ALTA','Porto Alegre','RS','90000-000','EXCLUSIVE','ALTA_RENDA','2017-02-20','APROVADO',false,'MEDIO'),
+('55555555555','PF','Eduarda Rocha','Duda','1995-12-02','F','SOLTEIRA','Analista Financeira',6200.00,'MEDIA','Curitiba','PR','81000-000','VAREJO','URBANO','2021-08-11','APROVADO',true,'BAIXO'),
+('66666666666','PF','Felipe Santos','Felipe','1990-09-30','M','CASADO','Professor',4800.00,'BAIXA','Campinas','SP','13000-000','VAREJO','MASSIFICADO','2019-03-27','APROVADO',true,'MEDIO'),
+('77777777777','PF','Gabriela Nunes','Gabi','1987-01-14','F','CASADA','Arquiteta',14300.00,'ALTA','Rio de Janeiro','RJ','22000-000','PRIME','PRIME_PLUS','2015-05-09','APROVADO',true,'BAIXO'),
+('88888888888','PF','Henrique Costa','Henrique','1983-06-08','M','CASADO','Advogado',9800.00,'MEDIA','Florianópolis','SC','88000-000','VAREJO','ALTA_RENDA','2018-10-03','APROVADO',false,'BAIXO'),
+('99999999999','PF','Isabela Freitas','Isa','1998-02-17','F','SOLTEIRA','Designer',3500.00,'BAIXA','Recife','PE','50000-000','VAREJO','JOVEM','2023-04-19','APROVADO',true,'MEDIO'),
+('10101010101','PF','João Pedro Ribeiro','João','1975-08-25','M','CASADO','Consultor',17200.00,'ALTA','Brasília','DF','70000-000','EXCLUSIVE','ALTA_RENDA','2014-12-12','APROVADO',true,'BAIXO'),
+('11122233344','PJ','Mercado Bom Preço LTDA','Bom Preço',NULL,NULL,NULL,'Comércio Varejista',65000.00,'EMPRESARIAL','Curitiba','PR','82000-000','EMPRESAS','VAREJO_PJ','2019-11-01','APROVADO',true,'MEDIO'),
+('55566677788','PJ','Tech Prime Serviços LTDA','Tech Prime',NULL,NULL,NULL,'Serviços de Tecnologia',92000.00,'EMPRESARIAL','São Paulo','SP','04600-000','EMPRESAS','TECH_PJ','2017-07-07','APROVADO',true,'BAIXO');
 
 INSERT INTO main.customer_360.tb_contas VALUES
 ('ACC001','11111111111','CORRENTE','ATIVA','2018-06-15','0001','Marina Lopes','Essencial Plus',2500.00),
@@ -54,18 +53,18 @@ INSERT INTO main.customer_360.tb_saldos_conta VALUES
 ('ACC012','55566677788','2026-04-01',183000.00,176200.00,true,455000.00,401000.00);
 
 INSERT INTO main.customer_360.tb_cartoes VALUES
-('CARD001','11111111111','Visa Infinite','VISA','ATIVO',38000.00,21000.00,15,true),
-('CARD002','22222222222','Master Platinum','MASTERCARD','ATIVO',18000.00,9600.00,8,true),
-('CARD003','33333333333','Black Signature','VISA','ATIVO',65000.00,28000.00,20,true),
-('CARD004','44444444444','Black Empresarial','MASTERCARD','ATIVO',42000.00,19000.00,12,true),
-('CARD005','55555555555','Gold','VISA','ATIVO',9000.00,4300.00,10,true),
-('CARD006','66666666666','Internacional','VISA','ATIVO',4500.00,1400.00,5,true),
-('CARD007','77777777777','Black Signature','VISA','ATIVO',52000.00,25000.00,18,true),
-('CARD008','88888888888','Platinum','MASTERCARD','ATIVO',20000.00,11000.00,7,true),
-('CARD009','99999999999','Universitário','VISA','ATIVO',2500.00,900.00,6,true),
-('CARD010','10101010101','Infinite','VISA','ATIVO',47000.00,22000.00,22,true),
-('CARD011','11122233344','Empresarial','VISA','ATIVO',85000.00,53000.00,25,true),
-('CARD012','55566677788','Empresarial Black','MASTERCARD','ATIVO',120000.00,71000.00,25,true);
+('CARD001','11111111111','INFINITE','VISA','ATIVO',38000.00,21000.00,15,true),
+('CARD002','22222222222','PLATINUM','MASTERCARD','ATIVO',18000.00,9600.00,8,true),
+('CARD003','33333333333','BLACK','VISA','ATIVO',65000.00,28000.00,20,true),
+('CARD004','44444444444','BLACK_EMPRESARIAL','MASTERCARD','ATIVO',42000.00,19000.00,12,true),
+('CARD005','55555555555','GOLD','VISA','ATIVO',9000.00,4300.00,10,true),
+('CARD006','66666666666','INTERNACIONAL','VISA','ATIVO',4500.00,1400.00,5,true),
+('CARD007','77777777777','BLACK','VISA','ATIVO',52000.00,25000.00,18,true),
+('CARD008','88888888888','PLATINUM','MASTERCARD','ATIVO',20000.00,11000.00,7,true),
+('CARD009','99999999999','UNIVERSITARIO','VISA','ATIVO',2500.00,900.00,6,true),
+('CARD010','10101010101','INFINITE','VISA','ATIVO',47000.00,22000.00,22,true),
+('CARD011','11122233344','EMPRESARIAL','VISA','ATIVO',85000.00,53000.00,25,true),
+('CARD012','55566677788','EMPRESARIAL_BLACK','MASTERCARD','ATIVO',120000.00,71000.00,25,true);
 
 INSERT INTO main.customer_360.tb_gastos_cartao VALUES
 ('CARD001','11111111111','2026-04-01',7200.00,6800.00,0.4200,true,0.3100),

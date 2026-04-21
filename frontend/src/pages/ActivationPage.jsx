@@ -14,8 +14,8 @@ export default function ActivationPage({ campaign }) {
       <div className="card page-header-card">
         <div>
           <p className="eyebrow">Etapa 3</p>
-          <h2>Ativação</h2>
-          <p className="muted">A ativação gera o objeto final com cpf_cnpj, data de segmentação, vigência e versão da regra.</p>
+          <h2>Ativação e materialização da audiência</h2>
+          <p className="muted">A ativação grava o resultado final no schema <code>main.campaign_execution</code>, preservando apenas os identificadores da campanha e os <code>cpf_cnpj</code> segmentados.</p>
         </div>
         <span className={`status-pill status-${campaign.status.toLowerCase()}`}>{campaign.status_label}</span>
       </div>
@@ -29,6 +29,7 @@ export default function ActivationPage({ campaign }) {
             <div><span>Início</span><strong>{activation.effective_start_date}</strong></div>
             <div><span>Fim</span><strong>{activation.effective_end_date}</strong></div>
             <div><span>Objeto final</span><strong>{activation.activation_object_name}</strong></div>
+            <div><span>Snapshot/log</span><strong>{activation.snapshot_object_name || '-'}</strong></div>
           </div>
         </div>
 
@@ -36,9 +37,9 @@ export default function ActivationPage({ campaign }) {
           <h3>Fluxo operacional</h3>
           <ul className="simple-list">
             <li>Pode voltar para Preparação para refinar o briefing.</li>
-            <li>Pode voltar para Segmentação para ajustar regras.</li>
-            <li>Pode pausar, encerrar, concluir ou cancelar.</li>
-            <li>Alterações ficam registradas em histórico.</li>
+            <li>Pode voltar para Segmentação para ajustar regras no-code.</li>
+            <li>O resultado final persiste somente a audiência segmentada e metadados de vigência.</li>
+            <li>As execuções ficam registradas no log de execução.</li>
           </ul>
         </div>
       </div>

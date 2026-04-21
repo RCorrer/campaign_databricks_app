@@ -13,10 +13,9 @@ def health():
     return {'status': 'ok', 'app': settings.app_name, 'version': settings.app_version}
 
 
-@api_router.get('/catalog/topics')
-def catalog_topics():
-    mapping = load_semantic_mapping(settings.campaign_mapping_file)
-    return {'topics': mapping.get('topics', []), 'universe_views': mapping.get('universe_views', [])}
+@api_router.get('/catalog/segmentation-builder')
+def segmentation_builder_catalog():
+    return load_semantic_mapping(settings.campaign_mapping_file)
 
 
 @api_router.post('/demo/bootstrap')

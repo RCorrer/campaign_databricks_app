@@ -1,4 +1,3 @@
--- Base mestre de clientes do banco
 CREATE TABLE IF NOT EXISTS main.customer_base.customer_master (
   cpf_cnpj STRING NOT NULL,
   customer_type STRING NOT NULL,
@@ -9,12 +8,15 @@ CREATE TABLE IF NOT EXISTS main.customer_base.customer_master (
   marital_status STRING,
   profession STRING,
   monthly_income DECIMAL(18,2),
+  income_band STRING,
   city STRING,
   state STRING,
+  postal_code STRING,
   segment STRING,
+  subsegment STRING,
   onboarding_date DATE,
   kyc_status STRING,
-  consent_marketing BOOLEAN,
+  marketing_consent BOOLEAN,
   risk_bucket STRING
 )
 USING DELTA;

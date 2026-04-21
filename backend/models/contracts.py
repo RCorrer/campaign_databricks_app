@@ -37,12 +37,13 @@ class BriefingPayload(BaseModel):
 
 
 class RuleCondition(BaseModel):
-    topic: str
-    entity: str
     field: str
     operator: str
     value: Any
     logical_connector: Literal['AND', 'OR'] = 'AND'
+    theme: str | None = None
+    entity: str | None = None
+    source_scope: Literal['NATIVE', 'THEMATIC'] = 'NATIVE'
 
 
 class RuleGroup(BaseModel):
@@ -51,7 +52,10 @@ class RuleGroup(BaseModel):
 
 
 class SegmentationPayload(BaseModel):
+    initial_audience_code: str
     universe_view: str
+    native_include_groups: list[RuleGroup] = Field(default_factory=list)
+    native_exclude_groups: list[RuleGroup] = Field(default_factory=list)
     include_groups: list[RuleGroup] = Field(default_factory=list)
     exclude_groups: list[RuleGroup] = Field(default_factory=list)
     save_as_version_note: str | None = None

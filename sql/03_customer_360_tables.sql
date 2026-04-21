@@ -1,4 +1,3 @@
--- Tabelas analíticas e operacionais 360 dos clientes
 CREATE TABLE IF NOT EXISTS main.customer_360.tb_contas (
   account_id STRING NOT NULL,
   cpf_cnpj STRING NOT NULL,
@@ -27,7 +26,7 @@ USING DELTA;
 CREATE TABLE IF NOT EXISTS main.customer_360.tb_cartoes (
   card_id STRING NOT NULL,
   cpf_cnpj STRING NOT NULL,
-  product_name STRING,
+  card_product STRING,
   card_brand STRING,
   card_status STRING,
   credit_limit DECIMAL(18,2),

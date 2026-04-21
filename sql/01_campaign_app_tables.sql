@@ -1,4 +1,3 @@
--- Metadados operacionais da aplicação de campanhas
 CREATE TABLE IF NOT EXISTS main.campaign_app.campaign_header (
   campaign_id STRING NOT NULL,
   campaign_name STRING NOT NULL,
@@ -36,7 +35,10 @@ USING DELTA;
 CREATE TABLE IF NOT EXISTS main.campaign_app.campaign_segmentation_version (
   campaign_id STRING NOT NULL,
   version_id INT NOT NULL,
+  initial_audience_code STRING NOT NULL,
   universe_view STRING NOT NULL,
+  native_include_rules_json STRING,
+  native_exclude_rules_json STRING,
   include_rules_json STRING,
   exclude_rules_json STRING,
   preview_sql STRING,
