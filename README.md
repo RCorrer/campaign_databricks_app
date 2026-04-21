@@ -106,3 +106,30 @@ uvicorn main:app --host 0.0.0.0 --port 8000
 - Arquivo de grants: `sql/08_app_grants.sql`
 - Guia rápido: `docs/app_access.md`
 - Substitua `<APP_SERVICE_PRINCIPAL>` pelo principal exato do app antes de executar o SQL.
+
+
+## Persistência real no Databricks
+
+Nesta versão, o backend grava e lê campanhas diretamente nas tabelas do Unity Catalog usando o SQL Warehouse configurado via:
+
+- `DATABRICKS_HOST`
+- `DATABRICKS_TOKEN`
+- `DATABRICKS_WAREHOUSE_ID`
+
+Se você já criou `main.campaign_app.campaign_header` em uma versão antiga sem a coluna `description`, execute também:
+
+- `sql/09_campaign_app_add_description.sql`
+- `sql/07_business_contracts.sql`
+- `sql/08_app_grants.sql`
+
+
+## Autenticação no Databricks App
+
+Este projeto usa o mesmo padrão do app de exemplo: o backend acessa o Databricks com `WorkspaceClient()` e `statement_execution`, sem exigir `DATABRICKS_HOST` nem `DATABRICKS_TOKEN` no ambiente do App.
+
+Variável obrigatória no `app.yaml`:
+- `DATABRICKS_WAREHOUSE_ID`
+
+Também é necessário:
+- ter o SQL Warehouse adicionado como resource do App
+- executar `sql/08_app_grants.sql` para dar acesso ao service principal do App

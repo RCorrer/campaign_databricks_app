@@ -5,6 +5,7 @@ SELECT
   header.theme,
   header.objective,
   header.strategy,
+  header.description,
   header.status,
   header.periodicity,
   header.start_date,

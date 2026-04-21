@@ -196,23 +196,29 @@ async function preparationPage(campaignId) {
     e.preventDefault()
     const form = new FormData(e.target)
     let id = campaignId
+    const campaignPayload = {
+      name: form.get('name'),
+      theme: form.get('theme'),
+      objective: form.get('objective'),
+      strategy: form.get('strategy') || 'Relacionamento',
+      start_date: form.get('start_date') || null,
+      end_date: form.get('end_date') || null,
+      periodicity: 'MENSAL',
+      max_impacts_month: 1,
+      control_group_enabled: false,
+      description: form.get('description') || '',
+    }
     if (campaignId === 'new') {
       const created = await api('/api/campaigns', {
         method: 'POST',
-        body: JSON.stringify({
-          name: form.get('name'),
-          theme: form.get('theme'),
-          objective: form.get('objective'),
-          strategy: form.get('strategy') || 'Relacionamento',
-          start_date: form.get('start_date') || null,
-          end_date: form.get('end_date') || null,
-          periodicity: 'MENSAL',
-          max_impacts_month: 1,
-          control_group_enabled: false,
-          description: form.get('description') || '',
-        }),
+        body: JSON.stringify(campaignPayload),
       })
       id = created.campaign_id
+    } else {
+      await api(`/api/campaigns/${campaignId}`, {
+        method: 'PUT',
+        body: JSON.stringify(campaignPayload),
+      })
     }
     await api(`/api/campaigns/${id}/briefing`, {
       method: 'PUT',
@@ -408,7 +414,7 @@ async function activationPage(campaignId) {
           </div>
           <div><label>Modo de execução</label>
             <select class="select" name="execution_mode">
-              ${['RUN','SAVE_ONLY'].map(v => `<option value="${v}" ${activation.execution_mode===v?'selected':''}>${v}</option>`).join('')}
+              ${['RUN','PREVIEW'].map(v => `<option value="${v}" ${activation.execution_mode===v?'selected':''}>${v}</option>`).join('')}
             </select>
           </div>
           <div><label>Data início</label><input class="input" type="date" name="effective_start_date" value="${activation.effective_start_date || campaign.start_date || ''}" /></div>

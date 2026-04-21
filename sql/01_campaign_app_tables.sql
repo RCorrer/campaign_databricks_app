@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS main.campaign_app.campaign_header (
   theme STRING,
   objective STRING,
   strategy STRING,
+  description STRING,
   status STRING NOT NULL,
   periodicity STRING,
   start_date DATE,
@@ -17,6 +18,7 @@ CREATE TABLE IF NOT EXISTS main.campaign_app.campaign_header (
   updated_by STRING
 )
 USING DELTA;
+
 
 CREATE TABLE IF NOT EXISTS main.campaign_app.campaign_briefing_version (
   campaign_id STRING NOT NULL,

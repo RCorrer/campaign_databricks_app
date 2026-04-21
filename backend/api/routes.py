@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 
 from backend.core.config import settings
-from backend.models.contracts import ActivationPayload, BriefingPayload, CampaignCreate, SegmentationPayload, StatusChangePayload
+from backend.models.contracts import ActivationPayload, BriefingPayload, CampaignCreate, CampaignUpdate, SegmentationPayload, StatusChangePayload
 from backend.services.campaign_service import campaign_service
 from backend.utils.mapping_loader import load_semantic_mapping
 
@@ -31,6 +31,14 @@ def list_campaigns():
 @api_router.post('/campaigns')
 def create_campaign(payload: CampaignCreate):
     return campaign_service.create_campaign(payload)
+
+
+@api_router.put('/campaigns/{campaign_id}')
+def update_campaign(campaign_id: str, payload: CampaignUpdate):
+    try:
+        return campaign_service.update_campaign(campaign_id, payload)
+    except KeyError:
+        raise HTTPException(status_code=404, detail='Campanha não encontrada')
 
 
 @api_router.get('/campaigns/{campaign_id}')

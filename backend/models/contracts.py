@@ -27,6 +27,21 @@ class CampaignCreate(BaseModel):
     description: str | None = None
 
 
+
+
+class CampaignUpdate(BaseModel):
+    name: str
+    objective: str
+    theme: str
+    strategy: str
+    start_date: str | None = None
+    end_date: str | None = None
+    periodicity: Literal['DIARIA', 'SEMANAL', 'MENSAL', 'PONTUAL'] = 'MENSAL'
+    max_impacts_month: int = 1
+    control_group_enabled: bool = True
+    description: str | None = None
+
+
 class BriefingPayload(BaseModel):
     challenge: str
     target_business_outcome: str

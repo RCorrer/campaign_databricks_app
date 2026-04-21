@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 from uuid import uuid4
 
@@ -7,9 +8,11 @@ from backend.models.contracts import (
     BriefingPayload,
     CampaignCreate,
     CampaignSummary,
+    CampaignUpdate,
     SegmentationPayload,
     StatusChangePayload,
 )
+from backend.repositories.databricks_sql import sql_repository
 from backend.services.query_builder import QueryBuilderService
 from backend.utils.mapping_loader import load_semantic_mapping
 
@@ -29,279 +32,348 @@ STATUS_LABELS = {
 class CampaignService:
     def __init__(self):
         self.query_builder = QueryBuilderService()
-        self._store: dict[str, dict] = {}
 
     def seed_demo_data(self) -> list[dict]:
-        if self._store:
-            return self.list_campaigns()
-
-        mapping = load_semantic_mapping(settings.campaign_mapping_file)
-        audiences = mapping.get('initial_audiences', [])
-
-        first = self.create_campaign(CampaignCreate(
-            name='Aquisição Cartão Prime sem Black',
-            objective='Ofertar upgrade de cartão para clientes Prime com alta renda e sem cartão Black.',
-            theme='CARTOES',
-            strategy='Aquisição',
-            start_date='2026-05-01',
-            end_date='2026-05-31',
-            periodicity='MENSAL',
-            max_impacts_month=2,
-            control_group_enabled=True,
-            description='Campanha de CRM com público inicial Prime, filtro nativo e cruzamento com tema Cartões.'
-        ))
-        self.save_briefing(first.campaign_id, BriefingPayload(
-            challenge='Encontrar clientes Prime com boa capacidade financeira e sem cartão premium no portfólio.',
-            target_business_outcome='Aumentar emissão do cartão premium em 15%.',
-            channels=['Push', 'Email', 'App Inbox'],
-            constraints=['Respeitar consentimento de marketing', 'Não impactar clientes com restrição bureau'],
-            business_rules=['Usar público inicial Prime', 'Aplicar filtros nativos de renda e UF', 'Excluir clientes com cartão Black'],
-            notes='Fluxo inspirado em Data Cloud para CRM no-code.'
-        ))
-        self.save_segmentation(first.campaign_id, SegmentationPayload(
-            initial_audience_code='prime',
-            universe_view=_find_audience_view(audiences, 'prime'),
-            native_include_groups=[{
-                'name': 'Base Prime com alta renda',
-                'conditions': [
-                    {'field': 'monthly_income', 'operator': 'GT', 'value': 12000, 'source_scope': 'NATIVE'},
-                    {'field': 'state', 'operator': 'IN', 'value': ['SP', 'PR', 'RJ'], 'logical_connector': 'AND', 'source_scope': 'NATIVE'}
-                ]
-            }],
-            native_exclude_groups=[{
-                'name': 'Sem bloqueio de comunicação',
-                'conditions': [
-                    {'field': 'marketing_consent', 'operator': 'EQUALS', 'value': False, 'source_scope': 'NATIVE'}
-                ]
-            }],
-            include_groups=[{
-                'name': 'Elegíveis ao cartão premium',
-                'conditions': [
-                    {'theme': 'elegibilidade', 'entity': 'main.customer_360.tb_elegibilidade_ofertas', 'field': 'produto', 'operator': 'EQUALS', 'value': 'CARTAO_BLACK', 'source_scope': 'THEMATIC'},
-                    {'theme': 'elegibilidade', 'entity': 'main.customer_360.tb_elegibilidade_ofertas', 'field': 'elegivel', 'operator': 'EQUALS', 'value': True, 'logical_connector': 'AND', 'source_scope': 'THEMATIC'}
-                ]
-            }],
-            exclude_groups=[{
-                'name': 'Excluir quem já possui Black',
-                'conditions': [
-                    {'theme': 'cartoes', 'entity': 'main.customer_360.tb_cartoes', 'field': 'card_product', 'operator': 'EQUALS', 'value': 'BLACK', 'source_scope': 'THEMATIC'}
-                ]
-            }, {
-                'name': 'Excluir restrição bureau',
-                'conditions': [
-                    {'theme': 'credito', 'entity': 'main.customer_360.tb_credito_perfil', 'field': 'restricao_bureau', 'operator': 'EQUALS', 'value': True, 'source_scope': 'THEMATIC'}
-                ]
-            }],
-            save_as_version_note='Prime v1'
-        ))
-        self.activate(first.campaign_id, ActivationPayload(
-            materialization_mode='TABLE',
-            execution_mode='RUN',
-            effective_start_date='2026-05-01',
-            effective_end_date='2026-05-31'
-        ))
-
-        second = self.create_campaign(CampaignCreate(
-            name='Capital de Giro PJ Paraná',
-            objective='Ativar ofertas PJ para empresas do Paraná com elegibilidade e risco controlado.',
-            theme='CREDITO',
-            strategy='Expansão',
-            start_date='2026-06-01',
-            end_date='2026-06-30',
-            periodicity='MENSAL',
-            max_impacts_month=1,
-            control_group_enabled=False,
-            description='Exemplo de campanha PJ com público inicial e cruzamentos temáticos.'
-        ))
-        self.save_briefing(second.campaign_id, BriefingPayload(
-            challenge='Encontrar empresas com limite aprovado e sem atraso relevante.',
-            target_business_outcome='Incrementar contratação de capital de giro.',
-            channels=['Gerente', 'Email'],
-            constraints=['Atender apenas PJ do Paraná'],
-            business_rules=['Público inicial PJ', 'Usar elegibilidade e crédito como temas de cruzamento'],
-            notes='Aguardando ativação.'
-        ))
-        self.save_segmentation(second.campaign_id, SegmentationPayload(
-            initial_audience_code='pj',
-            universe_view=_find_audience_view(audiences, 'pj'),
-            native_include_groups=[{
-                'name': 'Empresas do Paraná',
-                'conditions': [
-                    {'field': 'state', 'operator': 'EQUALS', 'value': 'PR', 'source_scope': 'NATIVE'}
-                ]
-            }],
-            include_groups=[{
-                'name': 'Elegíveis a capital de giro',
-                'conditions': [
-                    {'theme': 'elegibilidade', 'entity': 'main.customer_360.tb_elegibilidade_ofertas', 'field': 'produto', 'operator': 'EQUALS', 'value': 'CAPITAL_GIRO', 'source_scope': 'THEMATIC'},
-                    {'theme': 'elegibilidade', 'entity': 'main.customer_360.tb_elegibilidade_ofertas', 'field': 'elegivel', 'operator': 'EQUALS', 'value': True, 'logical_connector': 'AND', 'source_scope': 'THEMATIC'}
-                ]
-            }],
-            exclude_groups=[{
-                'name': 'Excluir atraso alto',
-                'conditions': [
-                    {'theme': 'credito', 'entity': 'main.customer_360.tb_credito_perfil', 'field': 'atraso_max_dias_12m', 'operator': 'GT', 'value': 10, 'source_scope': 'THEMATIC'}
-                ]
-            }],
-            save_as_version_note='PJ PR v1'
-        ))
-
-        third = self.create_campaign(CampaignCreate(
-            name='Investimentos Exclusive Digital',
-            objective='Ofertar investimentos premium para clientes Exclusive com forte uso digital.',
-            theme='INVESTIMENTOS',
-            strategy='Relacionamento',
-            start_date='2026-07-01',
-            end_date='2026-07-31',
-            periodicity='MENSAL',
-            max_impacts_month=1,
-            control_group_enabled=True,
-            description='Campanha em etapa de segmentação.'
-        ))
-        self.save_briefing(third.campaign_id, BriefingPayload(
-            challenge='Combinar público Exclusive com alta liquidez e adesão digital.',
-            target_business_outcome='Aumentar captação em investimento premium.',
-            channels=['Email', 'WhatsApp'],
-            constraints=['Excluir clientes sem app ativo'],
-            business_rules=['Usar público inicial Exclusive', 'Cruzar com investimentos e canais digitais'],
-            notes='Em revisão comercial.'
-        ))
-        self.save_segmentation(third.campaign_id, SegmentationPayload(
-            initial_audience_code='exclusive',
-            universe_view=_find_audience_view(audiences, 'exclusive'),
-            native_include_groups=[{
-                'name': 'Exclusive com renda mínima',
-                'conditions': [
-                    {'field': 'monthly_income', 'operator': 'GT', 'value': 20000, 'source_scope': 'NATIVE'}
-                ]
-            }],
-            include_groups=[{
-                'name': 'Possui investimento alto',
-                'conditions': [
-                    {'theme': 'investimentos', 'entity': 'main.customer_360.tb_investimentos', 'field': 'total_invested', 'operator': 'GT', 'value': 100000, 'source_scope': 'THEMATIC'}
-                ]
-            }, {
-                'name': 'Cliente digital',
-                'conditions': [
-                    {'theme': 'canais_digitais', 'entity': 'main.customer_360.tb_canais_digitais', 'field': 'mobile_app_active', 'operator': 'EQUALS', 'value': True, 'source_scope': 'THEMATIC'},
-                    {'theme': 'canais_digitais', 'entity': 'main.customer_360.tb_canais_digitais', 'field': 'login_count_30d', 'operator': 'GT', 'value': 10, 'logical_connector': 'AND', 'source_scope': 'THEMATIC'}
-                ]
-            }],
-            exclude_groups=[],
-            save_as_version_note='Exclusive digital v1'
-        ))
-        self.change_status(third.campaign_id, StatusChangePayload(new_status='PAUSADO', reason='Ajuste de copy e régua.'))
         return self.list_campaigns()
+
+    def list_campaigns(self) -> list[dict]:
+        rows = sql_repository.execute(f"""
+            SELECT
+              campaign_id,
+              campaign_name,
+              theme,
+              objective,
+              description,
+              status,
+              CAST(start_date AS STRING) AS start_date,
+              CAST(end_date AS STRING) AS end_date,
+              current_version
+            FROM {settings.metadata_namespace}.campaign_header
+            ORDER BY updated_at DESC, created_at DESC
+        """)
+        return [
+            {
+                'campaign_id': row['campaign_id'],
+                'name': row['campaign_name'],
+                'theme': row.get('theme'),
+                'objective': row.get('objective'),
+                'description': row.get('description'),
+                'status': row.get('status'),
+                'status_label': STATUS_LABELS.get(row.get('status'), row.get('status')),
+                'start_date': row.get('start_date'),
+                'end_date': row.get('end_date'),
+                'version': int(row.get('current_version') or 1),
+            }
+            for row in rows
+        ]
 
     def create_campaign(self, payload: CampaignCreate) -> CampaignSummary:
         campaign_id = f"CMP-{uuid4().hex[:10].upper()}"
-        mapping = load_semantic_mapping(settings.campaign_mapping_file)
-        base = {
-            'campaign_id': campaign_id,
-            'name': payload.name,
-            'theme': payload.theme,
-            'objective': payload.objective,
-            'strategy': payload.strategy,
-            'status': 'PREPARACAO',
-            'status_label': STATUS_LABELS['PREPARACAO'],
-            'version': 1,
-            'created_at': datetime.utcnow().isoformat(),
-            'start_date': payload.start_date,
-            'end_date': payload.end_date,
-            'campaign': payload.model_dump(),
-            'briefing': None,
-            'segmentation': None,
-            'activation': None,
-            'builder_catalog': mapping,
-            'timeline': [{'event': 'CAMPAIGN_CREATED', 'status': 'PREPARACAO', 'timestamp': datetime.utcnow().isoformat()}],
-        }
-        self._store[campaign_id] = base
-        return CampaignSummary(campaign_id=campaign_id, name=payload.name, status='PREPARACAO', start_date=payload.start_date, end_date=payload.end_date, version=1)
+        sql_repository.execute_script([
+            f"""
+            INSERT INTO {settings.metadata_namespace}.campaign_header (
+              campaign_id, campaign_name, theme, objective, strategy, description, status,
+              periodicity, start_date, end_date, max_impacts_month, control_group_enabled,
+              current_version, created_at, updated_at, created_by, updated_by
+            ) VALUES (
+              {q(campaign_id)}, {q(payload.name)}, {q(payload.theme)}, {q(payload.objective)}, {q(payload.strategy)}, {q(payload.description)}, 'PREPARACAO',
+              {q(payload.periodicity)}, {date_or_null(payload.start_date)}, {date_or_null(payload.end_date)}, {payload.max_impacts_month}, {bool_sql(payload.control_group_enabled)},
+              1, current_timestamp(), current_timestamp(), current_user(), current_user()
+            )
+            """,
+            self._status_history_sql(campaign_id, None, 'PREPARACAO', 'Criação da campanha'),
+            self._audit_sql(campaign_id, 'CAMPAIGN_CREATED', payload.model_dump()),
+        ])
+        return CampaignSummary(
+            campaign_id=campaign_id,
+            name=payload.name,
+            status='PREPARACAO',
+            start_date=payload.start_date,
+            end_date=payload.end_date,
+            version=1,
+        )
 
-    def list_campaigns(self) -> list[dict]:
-        return list(self._store.values())
+    def update_campaign(self, campaign_id: str, payload: CampaignUpdate) -> dict:
+        self._ensure_campaign_exists(campaign_id)
+        sql_repository.execute_script([
+            f"""
+            UPDATE {settings.metadata_namespace}.campaign_header
+            SET campaign_name = {q(payload.name)},
+                theme = {q(payload.theme)},
+                objective = {q(payload.objective)},
+                strategy = {q(payload.strategy)},
+                description = {q(payload.description)},
+                periodicity = {q(payload.periodicity)},
+                start_date = {date_or_null(payload.start_date)},
+                end_date = {date_or_null(payload.end_date)},
+                max_impacts_month = {payload.max_impacts_month},
+                control_group_enabled = {bool_sql(payload.control_group_enabled)},
+                updated_at = current_timestamp(),
+                updated_by = current_user()
+            WHERE campaign_id = {q(campaign_id)}
+            """,
+            self._audit_sql(campaign_id, 'CAMPAIGN_UPDATED', payload.model_dump()),
+        ])
+        return self.get_campaign(campaign_id)
 
     def get_campaign(self, campaign_id: str) -> dict:
-        return self._store[campaign_id]
+        rows = sql_repository.execute(f"""
+            SELECT *
+            FROM {settings.metadata_namespace}.vw_campaign_current_definition
+            WHERE campaign_id = {q(campaign_id)}
+        """)
+        if not rows:
+            raise KeyError(campaign_id)
+        row = rows[0]
+        header = sql_repository.execute(f"""
+            SELECT description, strategy
+            FROM {settings.metadata_namespace}.campaign_header
+            WHERE campaign_id = {q(campaign_id)}
+            LIMIT 1
+        """)[0]
+        status = row.get('status')
+        result = {
+            'campaign_id': row['campaign_id'],
+            'name': row.get('campaign_name'),
+            'theme': row.get('theme'),
+            'objective': row.get('objective'),
+            'strategy': row.get('strategy'),
+            'description': header.get('description'),
+            'status': status,
+            'status_label': STATUS_LABELS.get(status, status),
+            'start_date': row.get('start_date'),
+            'end_date': row.get('end_date'),
+            'version': int(row.get('current_version') or 1),
+            'campaign': {
+                'strategy': row.get('strategy'),
+                'description': header.get('description'),
+            },
+            'briefing': {
+                'challenge': row.get('challenge'),
+                'target_business_outcome': row.get('target_business_outcome'),
+                'channels': parse_array(row.get('channels')),
+                'constraints': parse_array(row.get('constraints')),
+                'business_rules': parse_array(row.get('business_rules')),
+                'notes': row.get('notes'),
+            },
+            'segmentation': {
+                'initial_audience_code': row.get('initial_audience_code'),
+                'universe_view': row.get('universe_view'),
+                'native_include_groups': parse_json(row.get('native_include_rules_json')) or [],
+                'native_exclude_groups': parse_json(row.get('native_exclude_rules_json')) or [],
+                'include_groups': parse_json(row.get('include_rules_json')) or [],
+                'exclude_groups': parse_json(row.get('exclude_rules_json')) or [],
+                'preview_sql': row.get('preview_sql'),
+                'estimated_audience': row.get('estimated_audience'),
+            },
+            'activation': {
+                'materialization_mode': row.get('materialization_mode'),
+                'activation_object_name': row.get('activation_object_name'),
+                'activation_sql': row.get('activation_sql'),
+                'effective_start_date': row.get('effective_start_date'),
+                'effective_end_date': row.get('effective_end_date'),
+                'activation_status': row.get('activation_status'),
+            },
+        }
+        return result
 
     def save_briefing(self, campaign_id: str, payload: BriefingPayload) -> dict:
-        campaign = self._store[campaign_id]
-        campaign['briefing'] = payload.model_dump()
-        campaign['status'] = 'SEGMENTACAO'
-        campaign['status_label'] = STATUS_LABELS['SEGMENTACAO']
-        campaign['version'] += 1
-        campaign['timeline'].append({'event': 'BRIEFING_REFINED', 'status': 'SEGMENTACAO', 'timestamp': datetime.utcnow().isoformat()})
-        return campaign
+        version = self._current_version(campaign_id)
+        self._ensure_campaign_exists(campaign_id)
+        sql_repository.execute_script([
+            f"DELETE FROM {settings.metadata_namespace}.campaign_briefing_version WHERE campaign_id = {q(campaign_id)} AND version_id = {version}",
+            f"""
+            INSERT INTO {settings.metadata_namespace}.campaign_briefing_version (
+              campaign_id, version_id, challenge, target_business_outcome, channels,
+              constraints, business_rules, notes, created_at, created_by
+            ) VALUES (
+              {q(campaign_id)}, {version}, {q(payload.challenge)}, {q(payload.target_business_outcome)}, {array_sql(payload.channels)},
+              {array_sql(payload.constraints)}, {array_sql(payload.business_rules)}, {q(payload.notes)}, current_timestamp(), current_user()
+            )
+            """,
+            f"UPDATE {settings.metadata_namespace}.campaign_header SET updated_at = current_timestamp(), updated_by = current_user() WHERE campaign_id = {q(campaign_id)}",
+            self._audit_sql(campaign_id, 'BRIEFING_SAVED', payload.model_dump()),
+        ])
+        return self.get_campaign(campaign_id)
 
     def save_segmentation(self, campaign_id: str, payload: SegmentationPayload) -> dict:
-        campaign = self._store[campaign_id]
+        version = self._current_version(campaign_id)
+        self._ensure_campaign_exists(campaign_id)
         preview_sql = self.query_builder.build_preview_sql(payload)
-        campaign['segmentation'] = {**payload.model_dump(), 'preview_sql': preview_sql}
-        campaign['status'] = 'ATIVACAO'
-        campaign['status_label'] = STATUS_LABELS['ATIVACAO']
-        campaign['version'] += 1
-        campaign['timeline'].append({'event': 'SEGMENTATION_SAVED', 'status': 'ATIVACAO', 'timestamp': datetime.utcnow().isoformat()})
-        return campaign
+        estimated_audience = sql_repository.scalar(f"SELECT COUNT(*) AS total FROM ({preview_sql}) q", 0)
+        sql_repository.execute_script([
+            f"DELETE FROM {settings.metadata_namespace}.campaign_segmentation_version WHERE campaign_id = {q(campaign_id)} AND version_id = {version}",
+            f"""
+            INSERT INTO {settings.metadata_namespace}.campaign_segmentation_version (
+              campaign_id, version_id, initial_audience_code, universe_view,
+              native_include_rules_json, native_exclude_rules_json, include_rules_json, exclude_rules_json,
+              preview_sql, estimated_audience, created_at, created_by
+            ) VALUES (
+              {q(campaign_id)}, {version}, {q(payload.initial_audience_code)}, {q(payload.universe_view)},
+              {q(json.dumps([g.model_dump() for g in payload.native_include_groups]))},
+              {q(json.dumps([g.model_dump() for g in payload.native_exclude_groups]))},
+              {q(json.dumps([g.model_dump() for g in payload.include_groups]))},
+              {q(json.dumps([g.model_dump() for g in payload.exclude_groups]))},
+              {q(preview_sql)}, {int(estimated_audience or 0)}, current_timestamp(), current_user()
+            )
+            """,
+            f"UPDATE {settings.metadata_namespace}.campaign_header SET status = 'SEGMENTACAO', updated_at = current_timestamp(), updated_by = current_user() WHERE campaign_id = {q(campaign_id)}",
+            self._status_history_sql(campaign_id, 'PREPARACAO', 'SEGMENTACAO', payload.save_as_version_note or 'Segmentação salva'),
+            self._audit_sql(campaign_id, 'SEGMENTATION_SAVED', payload.model_dump()),
+        ])
+        return self.get_campaign(campaign_id)
 
     def activate(self, campaign_id: str, payload: ActivationPayload) -> dict:
-        campaign = self._store[campaign_id]
-        activation_object_name = f"{settings.execution_namespace}.campaign_audience_{campaign_id.lower().replace('-', '_')}"
-        snapshot_object_name = f"{settings.execution_namespace}.campaign_audience_snapshot_{campaign_id.lower().replace('-', '_')}"
-        campaign['activation'] = {
-            **payload.model_dump(),
-            'activation_object_name': activation_object_name,
-            'snapshot_object_name': snapshot_object_name,
-            'activation_sql': self._build_activation_sql(campaign_id, campaign, payload, activation_object_name, snapshot_object_name),
-        }
-        campaign['status'] = 'ATIVO' if payload.execution_mode == 'RUN' else 'ATIVACAO'
-        campaign['status_label'] = STATUS_LABELS[campaign['status']]
-        campaign['version'] += 1
-        campaign['timeline'].append({'event': 'CAMPAIGN_ACTIVATED', 'status': campaign['status'], 'timestamp': datetime.utcnow().isoformat()})
-        return campaign
+        version = self._current_version(campaign_id)
+        self._ensure_campaign_exists(campaign_id)
+        segmentation_rows = sql_repository.execute(f"""
+            SELECT universe_view, preview_sql, initial_audience_code
+            FROM {settings.metadata_namespace}.campaign_segmentation_version
+            WHERE campaign_id = {q(campaign_id)} AND version_id = {version}
+            LIMIT 1
+        """)
+        if not segmentation_rows:
+            raise RuntimeError('Salve a segmentação antes de ativar a campanha')
+        segmentation = segmentation_rows[0]
+        object_name = f"{settings.execution_namespace}.audience_{campaign_id.lower().replace('-', '_')}_v{version}"
+        audience_select = f"""
+            SELECT
+              {q(campaign_id)} AS campaign_id,
+              {version} AS segmentation_version,
+              cpf_cnpj,
+              current_timestamp() AS dt_segmentacao,
+              {date_or_null(payload.effective_start_date)} AS dt_inicio_vigencia,
+              {date_or_null(payload.effective_end_date)} AS dt_fim_vigencia,
+              'ATIVA' AS status_audiencia,
+              {q(segmentation.get('initial_audience_code'))} AS origem_publico,
+              {q(payload.materialization_mode)} AS materialization_mode,
+              {q(payload.execution_mode)} AS execution_mode
+            FROM ({segmentation['preview_sql']}) src
+        """
+        activation_sql = f"CREATE OR REPLACE TABLE {object_name} AS {audience_select}"
+        sql_repository.execute_script([
+            activation_sql,
+            f"DELETE FROM {settings.execution_namespace}.campaign_audience WHERE campaign_id = {q(campaign_id)} AND segmentation_version = {version}",
+            f"INSERT INTO {settings.execution_namespace}.campaign_audience {audience_select}",
+            f"DELETE FROM {settings.execution_namespace}.campaign_run_log WHERE campaign_id = {q(campaign_id)} AND segmentation_version = {version}",
+            f"""
+            INSERT INTO {settings.execution_namespace}.campaign_run_log (
+              campaign_id, segmentation_version, run_ts, execution_mode, materialization_mode,
+              output_object, total_records, snapshot_object, run_status, error_message
+            )
+            SELECT
+              {q(campaign_id)}, {version}, current_timestamp(), {q(payload.execution_mode)}, {q(payload.materialization_mode)},
+              {q(object_name)}, COUNT(*), NULL, 'SUCCEEDED', NULL
+            FROM {object_name}
+            """,
+            f"DELETE FROM {settings.metadata_namespace}.campaign_activation_version WHERE campaign_id = {q(campaign_id)} AND version_id = {version}",
+            f"""
+            INSERT INTO {settings.metadata_namespace}.campaign_activation_version (
+              campaign_id, version_id, materialization_mode, activation_object_name, activation_sql,
+              effective_start_date, effective_end_date, activation_status, activated_at, activated_by
+            ) VALUES (
+              {q(campaign_id)}, {version}, {q(payload.materialization_mode)}, {q(object_name)}, {q(activation_sql)},
+              {date_or_null(payload.effective_start_date)}, {date_or_null(payload.effective_end_date)}, 'ATIVO', current_timestamp(), current_user()
+            )
+            """,
+            f"UPDATE {settings.metadata_namespace}.campaign_header SET status = 'ATIVO', updated_at = current_timestamp(), updated_by = current_user() WHERE campaign_id = {q(campaign_id)}",
+            self._status_history_sql(campaign_id, 'SEGMENTACAO', 'ATIVO', 'Campanha ativada'),
+            self._audit_sql(campaign_id, 'CAMPAIGN_ACTIVATED', payload.model_dump() | {'output_object': object_name}),
+        ])
+        return self.get_campaign(campaign_id)
 
     def change_status(self, campaign_id: str, payload: StatusChangePayload) -> dict:
-        campaign = self._store[campaign_id]
-        campaign['status'] = payload.new_status
-        campaign['status_label'] = STATUS_LABELS[payload.new_status]
-        campaign['timeline'].append({'event': 'STATUS_CHANGED', 'status': payload.new_status, 'reason': payload.reason, 'timestamp': datetime.utcnow().isoformat()})
-        return campaign
+        self._ensure_campaign_exists(campaign_id)
+        current_status = sql_repository.scalar(
+            f"SELECT status FROM {settings.metadata_namespace}.campaign_header WHERE campaign_id = {q(campaign_id)}",
+            'PREPARACAO',
+        )
+        sql_repository.execute_script([
+            f"UPDATE {settings.metadata_namespace}.campaign_header SET status = {q(payload.new_status)}, updated_at = current_timestamp(), updated_by = current_user() WHERE campaign_id = {q(campaign_id)}",
+            self._status_history_sql(campaign_id, current_status, payload.new_status, payload.reason),
+            self._audit_sql(campaign_id, 'STATUS_CHANGED', payload.model_dump()),
+        ])
+        return self.get_campaign(campaign_id)
 
-    def _build_activation_sql(self, campaign_id: str, campaign: dict, payload: ActivationPayload, activation_object_name: str, snapshot_object_name: str) -> str:
-        segmentation_sql = (campaign.get('segmentation') or {}).get('preview_sql', f"SELECT cpf_cnpj FROM {settings.source_namespace}.vw_publico_varejo")
-        ddl = {
-            'TABLE': 'CREATE OR REPLACE TABLE',
-            'VIEW': 'CREATE OR REPLACE VIEW',
-            'MATERIALIZED_VIEW': 'CREATE OR REPLACE MATERIALIZED VIEW',
-        }[payload.materialization_mode]
+    def _ensure_campaign_exists(self, campaign_id: str) -> None:
+        exists = sql_repository.scalar(
+            f"SELECT COUNT(*) FROM {settings.metadata_namespace}.campaign_header WHERE campaign_id = {q(campaign_id)}",
+            0,
+        )
+        if int(exists or 0) == 0:
+            raise KeyError(campaign_id)
+
+    def _current_version(self, campaign_id: str) -> int:
+        version = sql_repository.scalar(
+            f"SELECT current_version FROM {settings.metadata_namespace}.campaign_header WHERE campaign_id = {q(campaign_id)}",
+            1,
+        )
+        return int(version or 1)
+
+    def _status_history_sql(self, campaign_id: str, from_status: str | None, to_status: str, reason: str | None) -> str:
         return f"""
-{ddl} {activation_object_name}
-USING DELTA
-AS
-SELECT
-    '{campaign_id}' AS campaign_id,
-    {campaign['version']} AS segmentation_version,
-    cpf_cnpj,
-    current_timestamp() AS dt_segmentacao,
-    DATE('{payload.effective_start_date}') AS dt_inicio_vigencia,
-    DATE('{payload.effective_end_date}') AS dt_fim_vigencia,
-    'ATIVO' AS status_audiencia
-FROM (
-    {segmentation_sql}
-);
+        INSERT INTO {settings.metadata_namespace}.campaign_status_history (
+          campaign_id, from_status, to_status, change_reason, changed_at, changed_by
+        ) VALUES (
+          {q(campaign_id)}, {q(from_status)}, {q(to_status)}, {q(reason)}, current_timestamp(), current_user()
+        )
+        """
 
-INSERT INTO {settings.execution_namespace}.campaign_run_log
-SELECT
-    '{campaign_id}' AS campaign_id,
-    {campaign['version']} AS segmentation_version,
-    current_timestamp() AS run_ts,
-    '{payload.execution_mode}' AS execution_mode,
-    '{payload.materialization_mode}' AS materialization_mode,
-    '{activation_object_name}' AS output_object,
-    NULL AS total_records,
-    '{snapshot_object_name}' AS snapshot_object,
-    'SUCCESS' AS run_status,
-    NULL AS error_message;
-""".strip()
+    def _audit_sql(self, campaign_id: str, event_name: str, payload: dict) -> str:
+        return f"""
+        INSERT INTO {settings.metadata_namespace}.campaign_audit_event (
+          campaign_id, event_name, payload_json, event_ts, event_user
+        ) VALUES (
+          {q(campaign_id)}, {q(event_name)}, {q(json.dumps(payload, ensure_ascii=False))}, current_timestamp(), current_user()
+        )
+        """
+
+
+campaign_service = CampaignService()
+
+
+def q(value) -> str:
+    if value is None:
+        return 'NULL'
+    return "'" + str(value).replace("'", "''") + "'"
+
+
+def bool_sql(value: bool) -> str:
+    return 'true' if value else 'false'
+
+
+def date_or_null(value: str | None) -> str:
+    if not value:
+        return 'NULL'
+    return f"DATE {q(value)}"
+
+
+def array_sql(values: list[str]) -> str:
+    if not values:
+        return 'array()'
+    return 'array(' + ', '.join(q(v) for v in values) + ')'
+
+
+def parse_json(value):
+    if value in (None, ''):
+        return None
+    if isinstance(value, (list, dict)):
+        return value
+    return json.loads(value)
+
+
+def parse_array(value):
+    if value in (None, ''):
+        return []
+    if isinstance(value, list):
+        return value
+    text = str(value).strip()
+    if text.startswith('['):
+        try:
+            return json.loads(text)
+        except Exception:
+            return []
+    return [item.strip() for item in text.strip('{}').split(',') if item.strip()]
 
 
 def _find_audience_view(audiences: list[dict], audience_code: str) -> str:
@@ -309,6 +381,3 @@ def _find_audience_view(audiences: list[dict], audience_code: str) -> str:
         if audience.get('code') == audience_code:
             return audience['source_view']
     raise ValueError(f'Público inicial não encontrado: {audience_code}')
-
-
-campaign_service = CampaignService()
