@@ -1,0 +1,7 @@
+-- Catálogo e schemas base do projeto
+CREATE CATALOG IF NOT EXISTS main;
+
+CREATE SCHEMA IF NOT EXISTS main.campaign_app;
+CREATE SCHEMA IF NOT EXISTS main.customer_base;
+CREATE SCHEMA IF NOT EXISTS main.customer_360;
+CREATE SCHEMA IF NOT EXISTS main.campaign_sources;

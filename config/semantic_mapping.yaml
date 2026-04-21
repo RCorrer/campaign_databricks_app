@@ -1,10 +1,10 @@
 topics:
   - key: elegibilidade
     label: Elegibilidade
-    description: Regras ligadas à elegibilidade de produtos e ofertas.
+    description: Regras ligadas à elegibilidade comercial e ofertas pré-aprovadas.
     entities:
-      - entity: vw_elegibilidade_cliente
-        label: Elegibilidade do cliente
+      - entity: tb_elegibilidade_ofertas
+        label: Elegibilidade de ofertas
         join_key: cpf_cnpj
         fields:
           - field: produto
@@ -21,14 +21,14 @@ topics:
             operators: [GT, GTE, LT, LTE]
   - key: relacionamento
     label: Relacionamento
-    description: Informações de vínculo do cliente com o banco.
+    description: Dados cadastrais, segmentação comercial e relacionamento com a conta.
     entities:
-      - entity: vw_relacionamento_cliente
-        label: Relacionamento do cliente
+      - entity: tb_contas
+        label: Contas
         join_key: cpf_cnpj
         fields:
-          - field: segmento
-            label: Segmento
+          - field: segment
+            label: Segmento do cliente
             type: string
             operators: [EQUALS, IN, NOT_IN]
           - field: tempo_relacionamento_meses
@@ -41,10 +41,10 @@ topics:
             operators: [EQUALS, IN, NOT_IN]
   - key: comportamento
     label: Comportamento
-    description: Indicadores comportamentais e transacionais.
+    description: Indicadores de consumo, uso digital e potencial de investimento.
     entities:
-      - entity: vw_comportamento_financeiro
-        label: Comportamento financeiro
+      - entity: tb_gastos_cartao
+        label: Gastos de cartão
         join_key: cpf_cnpj
         fields:
           - field: ticket_medio_6m
@@ -54,12 +54,15 @@ topics:
           - field: frequencia_transacional
             label: Frequência transacional
             type: string
-            operators: [EQUALS, IN]
+            operators: [EQUALS, IN, NOT_IN]
           - field: propensao_investimento
             label: Propensão a investimento
             type: number
             operators: [GT, GTE, LT, LTE]
 universe_views:
-  - vw_universo_cartoes_ativos
   - vw_universo_clientes_varejo
+  - vw_universo_cartoes_ativos
   - vw_universo_investimentos
+  - vw_universo_alta_renda
+  - vw_universo_credito_preaprovado
+  - vw_universo_empresas
