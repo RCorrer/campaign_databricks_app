@@ -41,6 +41,14 @@ def update_campaign(campaign_id: str, payload: CampaignUpdate):
         raise HTTPException(status_code=404, detail='Campanha não encontrada')
 
 
+@api_router.delete('/campaigns/{campaign_id}')
+def delete_campaign(campaign_id: str):
+    try:
+        return campaign_service.delete_campaign(campaign_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail='Campanha não encontrada')
+
+
 @api_router.get('/campaigns/{campaign_id}')
 def get_campaign(campaign_id: str):
     try:
@@ -79,3 +87,5 @@ def change_campaign_status(campaign_id: str, payload: StatusChangePayload):
         return campaign_service.change_status(campaign_id, payload)
     except KeyError:
         raise HTTPException(status_code=404, detail='Campanha não encontrada')
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))

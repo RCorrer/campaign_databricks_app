@@ -2,6 +2,7 @@ const state = {
   campaigns: [],
   builderCatalog: null,
   currentCampaign: null,
+  preparationEditMode: false,
 }
 
 const statusClass = {
@@ -15,13 +16,52 @@ const statusClass = {
   CANCELADO: 'tag-red',
 }
 
+const statusLabel = {
+  PREPARACAO: 'Preparação',
+  SEGMENTACAO: 'Segmentação',
+  ATIVACAO: 'Ativação',
+  ATIVO: 'Ativo',
+  PAUSADO: 'Pausado',
+  CONCLUIDO: 'Concluído',
+  ENCERRADO: 'Encerrado',
+  CANCELADO: 'Cancelado',
+}
+
+const statusActionLabel = {
+  PREPARACAO: 'Voltar para preparação',
+  SEGMENTACAO: 'Mover para segmentação',
+  ATIVACAO: 'Mover para ativação',
+  ATIVO: 'Ativar',
+  PAUSADO: 'Pausar',
+  CONCLUIDO: 'Concluir',
+  ENCERRADO: 'Encerrar',
+  CANCELADO: 'Cancelar',
+}
+
 const app = document.getElementById('app')
 
 function pathParts() {
   return window.location.pathname.split('/').filter(Boolean)
 }
 
-function navigate(path) {
+function setFlash(message, type = 'success') {
+  sessionStorage.setItem('flash', JSON.stringify({ message, type }))
+}
+
+function consumeFlash() {
+  const raw = sessionStorage.getItem('flash')
+  if (!raw) return ''
+  sessionStorage.removeItem('flash')
+  try {
+    const flash = JSON.parse(raw)
+    return `<div class="toast toast-${flash.type}">${escapeHtml(flash.message)}</div>`
+  } catch {
+    return ''
+  }
+}
+
+function navigate(path, flash = null) {
+  if (flash) setFlash(flash.message, flash.type)
   history.pushState({}, '', path)
   render()
 }
@@ -41,13 +81,22 @@ async function api(url, options = {}) {
     ...options,
   })
   if (!response.ok) {
-    const text = await response.text()
-    throw new Error(text || 'Erro na requisição')
+    let message = 'Erro na requisição'
+    try {
+      const json = await response.json()
+      message = json.detail || json.message || message
+    } catch {
+      const text = await response.text()
+      message = text || message
+    }
+    throw new Error(message)
   }
+  if (response.status === 204) return null
   return response.json()
 }
 
 function shell(content, active = '') {
+  const flash = consumeFlash()
   return `
     <div class="layout">
       <aside class="sidebar">
@@ -58,20 +107,13 @@ function shell(content, active = '') {
           <a href="/campaigns/new/preparation" data-link class="${active === 'new' ? 'active' : ''}">Nova campanha</a>
         </nav>
       </aside>
-      <main class="main">${content}</main>
+      <main class="main">${flash}${content}</main>
     </div>
   `
 }
 
 function metricCard(label, value) {
   return `<div class="card kpi"><strong>${value}</strong><div>${label}</div></div>`
-}
-
-function getCampaignStep(path) {
-  if (path.includes('/preparation')) return 'Preparação'
-  if (path.includes('/segmentation')) return 'Segmentação'
-  if (path.includes('/activation')) return 'Ativação'
-  return ''
 }
 
 function campaignSteps(campaignId, current) {
@@ -85,11 +127,32 @@ function campaignSteps(campaignId, current) {
 }
 
 async function ensureBootstrap() {
-  const campaigns = await api('/api/campaigns')
-  if (campaigns.length === 0) {
-    await api('/api/demo/bootstrap', { method: 'POST' })
-  }
   state.campaigns = await api('/api/campaigns')
+}
+
+function campaignCard(campaign) {
+  const transitions = (campaign.allowed_transitions || []).slice(0, 2)
+  return `
+    <article class="card campaign-card">
+      <div class="campaign-card-top">
+        <div>
+          <div class="campaign-card-title">${escapeHtml(campaign.name)}</div>
+          <div class="small">${escapeHtml(campaign.theme || 'Sem tema')} · versão ${campaign.version}</div>
+        </div>
+        <span class="tag ${statusClass[campaign.status] || 'tag-blue'}">${escapeHtml(campaign.status_label || campaign.status)}</span>
+      </div>
+      <p class="campaign-card-text">${escapeHtml(campaign.objective || campaign.description || 'Sem objetivo informado')}</p>
+      <div class="campaign-card-meta">
+        <span><strong>Início:</strong> ${escapeHtml(campaign.start_date || '-')}</span>
+        <span><strong>Fim:</strong> ${escapeHtml(campaign.end_date || '-')}</span>
+      </div>
+      <div class="campaign-card-actions">
+        <a href="/campaigns/${campaign.campaign_id}/preparation" data-link><button class="primary">Abrir</button></a>
+        ${transitions.map(status => `<button class="ghost" data-status-action="${campaign.campaign_id}|${status}">${escapeHtml(statusActionLabel[status] || statusLabel[status] || status)}</button>`).join('')}
+        <button class="danger" data-delete-campaign="${campaign.campaign_id}">Excluir</button>
+      </div>
+    </article>
+  `
 }
 
 async function dashboardPage() {
@@ -98,7 +161,7 @@ async function dashboardPage() {
   const term = (q.get('q') || '').toLowerCase()
   const status = q.get('status') || ''
   const filtered = state.campaigns.filter((campaign) => {
-    const matchesText = !term || campaign.name.toLowerCase().includes(term) || campaign.objective.toLowerCase().includes(term)
+    const matchesText = !term || campaign.name.toLowerCase().includes(term) || (campaign.objective || '').toLowerCase().includes(term)
     const matchesStatus = !status || campaign.status === status
     return matchesText && matchesStatus
   })
@@ -111,7 +174,7 @@ async function dashboardPage() {
     <div class="header">
       <div>
         <h1 class="title">Campanhas</h1>
-        <p class="subtitle">Visão resumida, busca e navegação pelas etapas da jornada.</p>
+        <p class="subtitle">Resumo em cards, ações rápidas e navegação direta por campanha.</p>
       </div>
       <div><a href="/campaigns/new/preparation" data-link><button class="primary">Nova campanha</button></a></div>
     </div>
@@ -122,29 +185,16 @@ async function dashboardPage() {
     </div>
     <div class="card" style="margin-top:16px;">
       <form class="toolbar" id="filter-form">
-        <input class="input" style="max-width:260px;" name="q" placeholder="Buscar campanha" value="${q.get('q') || ''}" />
+        <input class="input" style="max-width:260px;" name="q" placeholder="Buscar campanha" value="${escapeHtml(q.get('q') || '')}" />
         <select class="select" style="max-width:220px;" name="status">
           <option value="">Todos os status</option>
-          ${['PREPARACAO','SEGMENTACAO','ATIVACAO','ATIVO','PAUSADO','CONCLUIDO','ENCERRADO','CANCELADO'].map(s => `<option value="${s}" ${status===s?'selected':''}>${s}</option>`).join('')}
+          ${['PREPARACAO','SEGMENTACAO','ATIVACAO','ATIVO','PAUSADO','CONCLUIDO','ENCERRADO','CANCELADO'].map(s => `<option value="${s}" ${status===s?'selected':''}>${statusLabel[s]}</option>`).join('')}
         </select>
         <button class="primary" type="submit">Filtrar</button>
       </form>
-      <table class="table">
-        <thead>
-          <tr><th>Campanha</th><th>Tema</th><th>Status</th><th>Período</th><th>Versão</th><th></th></tr>
-        </thead>
-        <tbody>
-          ${filtered.map(c => `
-            <tr>
-              <td><strong>${c.name}</strong><div class="small">${c.objective}</div></td>
-              <td>${c.theme}</td>
-              <td><span class="tag ${statusClass[c.status] || 'tag-blue'}">${c.status_label}</span></td>
-              <td>${c.start_date || '-'}<br>${c.end_date || '-'}</td>
-              <td>${c.version}</td>
-              <td><a href="/campaigns/${c.campaign_id}/preparation" data-link><button>Abrir</button></a></td>
-            </tr>`).join('')}
-        </tbody>
-      </table>
+      <div class="campaign-cards">
+        ${filtered.length ? filtered.map(campaignCard).join('') : '<div class="empty">Nenhuma campanha encontrada.</div>'}
+      </div>
     </div>
   `, 'dashboard')
   document.getElementById('filter-form').onsubmit = (e) => {
@@ -155,58 +205,82 @@ async function dashboardPage() {
     if (form.get('status')) params.set('status', form.get('status'))
     navigate(`/?${params.toString()}`)
   }
+  bindCampaignActions()
+}
+
+function getPreparationStatusActions(campaign) {
+  return (campaign.allowed_transitions || []).map(status => ({ status, label: statusActionLabel[status] || statusLabel[status] || status }))
 }
 
 async function preparationPage(campaignId) {
+  state.preparationEditMode = campaignId === 'new'
   if (campaignId !== 'new') {
     state.currentCampaign = await api(`/api/campaigns/${campaignId}`)
+  } else {
+    state.currentCampaign = null
   }
   const campaign = state.currentCampaign
+  const readOnly = campaignId !== 'new' && !state.preparationEditMode
   app.innerHTML = shell(`
     ${campaignSteps(campaignId, 'Preparação')}
     <div class="header">
       <div>
         <h1 class="title">Preparação</h1>
-        <p class="subtitle">Briefing inicial, objetivo e regras de negócio da campanha.</p>
+        <p class="subtitle">Defina briefing, estratégia e metadados da campanha. Depois avance para segmentação.</p>
       </div>
+      ${campaign ? `<div class="header-badges"><span class="tag ${statusClass[campaign.status] || 'tag-blue'}">${escapeHtml(campaign.status_label)}</span></div>` : ''}
     </div>
+    ${campaign ? `<div class="card" style="margin-bottom:16px;"><div class="toolbar compact"><a href="/campaigns/${campaignId}/segmentation" data-link><button type="button" class="primary">Ir para segmentação</button></a><button type="button" id="toggle-edit">${readOnly ? 'Editar' : 'Bloquear edição'}</button>${getPreparationStatusActions(campaign).map(action => `<button type="button" class="ghost" data-status-action="${campaignId}|${action.status}">${escapeHtml(action.label)}</button>`).join('')}<button type="button" class="danger" data-delete-campaign="${campaignId}">Excluir</button></div><div class="small">Fluxo recomendado: Preparação → Segmentação → Ativação → Ativo. Ajustes de regra podem retornar para Preparação ou Segmentação conforme o estágio.</div></div>` : ''}
     <div class="card">
       <form id="campaign-form" class="form-grid">
-        <div><label>Nome</label><input class="input" name="name" value="${campaign?.name || ''}" required /></div>
-        <div><label>Tema</label><input class="input" name="theme" value="${campaign?.theme || ''}" required /></div>
-        <div class="full"><label>Objetivo</label><input class="input" name="objective" value="${campaign?.objective || ''}" required /></div>
-        <div><label>Estratégia</label><input class="input" name="strategy" value="${campaign?.campaign?.strategy || ''}" /></div>
-        <div><label>Descrição</label><input class="input" name="description" value="${campaign?.campaign?.description || ''}" /></div>
-        <div><label>Data início</label><input class="input" type="date" name="start_date" value="${campaign?.start_date || ''}" /></div>
-        <div><label>Data fim</label><input class="input" type="date" name="end_date" value="${campaign?.end_date || ''}" /></div>
-        <div class="full"><label>Desafio</label><textarea class="textarea" name="challenge">${campaign?.briefing?.challenge || ''}</textarea></div>
-        <div class="full"><label>Resultado esperado</label><textarea class="textarea" name="target_business_outcome">${campaign?.briefing?.target_business_outcome || ''}</textarea></div>
-        <div class="full"><label>Regras de negócio (uma por linha)</label><textarea class="textarea" name="business_rules">${(campaign?.briefing?.business_rules || []).join('\n')}</textarea></div>
-        <div class="full"><label>Restrições (uma por linha)</label><textarea class="textarea" name="constraints">${(campaign?.briefing?.constraints || []).join('\n')}</textarea></div>
-        <div class="full"><label>Observações</label><textarea class="textarea" name="notes">${campaign?.briefing?.notes || ''}</textarea></div>
+        <div><label>Nome</label><input class="input" name="name" value="${escapeHtml(campaign?.name || '')}" ${readOnly ? 'disabled' : ''} required /></div>
+        <div><label>Tema</label><input class="input" name="theme" value="${escapeHtml(campaign?.theme || '')}" ${readOnly ? 'disabled' : ''} required /></div>
+        <div class="full"><label>Objetivo</label><input class="input" name="objective" value="${escapeHtml(campaign?.objective || '')}" ${readOnly ? 'disabled' : ''} required /></div>
+        <div><label>Estratégia</label><input class="input" name="strategy" value="${escapeHtml(campaign?.campaign?.strategy || '')}" ${readOnly ? 'disabled' : ''} /></div>
+        <div><label>Descrição</label><input class="input" name="description" value="${escapeHtml(campaign?.campaign?.description || '')}" ${readOnly ? 'disabled' : ''} /></div>
+        <div><label>Data início</label><input class="input" type="date" name="start_date" value="${escapeHtml(campaign?.start_date || '')}" ${readOnly ? 'disabled' : ''} /></div>
+        <div><label>Data fim</label><input class="input" type="date" name="end_date" value="${escapeHtml(campaign?.end_date || '')}" ${readOnly ? 'disabled' : ''} /></div>
+        <div class="full"><label>Desafio</label><textarea class="textarea" name="challenge" ${readOnly ? 'disabled' : ''}>${escapeHtml(campaign?.briefing?.challenge || '')}</textarea></div>
+        <div class="full"><label>Resultado esperado</label><textarea class="textarea" name="target_business_outcome" ${readOnly ? 'disabled' : ''}>${escapeHtml(campaign?.briefing?.target_business_outcome || '')}</textarea></div>
+        <div class="full"><label>Regras de negócio (uma por linha)</label><textarea class="textarea" name="business_rules" ${readOnly ? 'disabled' : ''}>${escapeHtml((campaign?.briefing?.business_rules || []).join('\n'))}</textarea></div>
+        <div class="full"><label>Restrições (uma por linha)</label><textarea class="textarea" name="constraints" ${readOnly ? 'disabled' : ''}>${escapeHtml((campaign?.briefing?.constraints || []).join('\n'))}</textarea></div>
+        <div class="full"><label>Observações</label><textarea class="textarea" name="notes" ${readOnly ? 'disabled' : ''}>${escapeHtml(campaign?.briefing?.notes || '')}</textarea></div>
         <div class="footer-actions full">
           <a href="/" data-link><button type="button" class="ghost">Voltar</button></a>
-          <button type="submit" class="primary">Salvar e seguir</button>
+          ${readOnly ? '' : '<button type="submit" class="primary">Salvar e seguir</button>'}
         </div>
       </form>
     </div>
   `, campaignId === 'new' ? 'new' : '')
 
-  document.getElementById('campaign-form').onsubmit = async (e) => {
+  if (campaign) {
+    const toggleBtn = document.getElementById('toggle-edit')
+    if (toggleBtn) {
+      toggleBtn.onclick = () => {
+        state.preparationEditMode = !state.preparationEditMode
+        preparationPage(campaignId)
+      }
+    }
+    bindCampaignActions()
+  }
+
+  const form = document.getElementById('campaign-form')
+  if (!form || readOnly) return
+  form.onsubmit = async (e) => {
     e.preventDefault()
-    const form = new FormData(e.target)
+    const formData = new FormData(e.target)
     let id = campaignId
     const campaignPayload = {
-      name: form.get('name'),
-      theme: form.get('theme'),
-      objective: form.get('objective'),
-      strategy: form.get('strategy') || 'Relacionamento',
-      start_date: form.get('start_date') || null,
-      end_date: form.get('end_date') || null,
+      name: formData.get('name'),
+      theme: formData.get('theme'),
+      objective: formData.get('objective'),
+      strategy: formData.get('strategy') || 'Relacionamento',
+      start_date: formData.get('start_date') || null,
+      end_date: formData.get('end_date') || null,
       periodicity: 'MENSAL',
       max_impacts_month: 1,
       control_group_enabled: false,
-      description: form.get('description') || '',
+      description: formData.get('description') || '',
     }
     if (campaignId === 'new') {
       const created = await api('/api/campaigns', {
@@ -223,15 +297,16 @@ async function preparationPage(campaignId) {
     await api(`/api/campaigns/${id}/briefing`, {
       method: 'PUT',
       body: JSON.stringify({
-        challenge: form.get('challenge') || '',
-        target_business_outcome: form.get('target_business_outcome') || '',
+        challenge: formData.get('challenge') || '',
+        target_business_outcome: formData.get('target_business_outcome') || '',
         channels: ['Email'],
-        constraints: splitLines(form.get('constraints')),
-        business_rules: splitLines(form.get('business_rules')),
-        notes: form.get('notes') || '',
+        constraints: splitLines(formData.get('constraints')),
+        business_rules: splitLines(formData.get('business_rules')),
+        notes: formData.get('notes') || '',
       }),
     })
-    navigate(`/campaigns/${id}/segmentation`)
+    state.preparationEditMode = false
+    navigate(`/campaigns/${id}/preparation`, { message: campaignId === 'new' ? 'Campanha criada com sucesso.' : 'Campanha atualizada com sucesso.', type: 'success' })
   }
 }
 
@@ -244,15 +319,17 @@ function ruleRowHtml({ native, index, themes, nativeFields, rule = {} }) {
     return `<div class="rule-row native">
       <select class="select" name="field-${index}">${nativeFields.map(f => `<option value="${f.field}" ${rule.field===f.field?'selected':''}>${f.label}</option>`).join('')}</select>
       <select class="select" name="operator-${index}">${operatorOptions(rule.operator)}</select>
-      <input class="input" name="value-${index}" value="${formatValue(rule.value)}" placeholder="Valor" />
+      <input class="input" name="value-${index}" value="${escapeHtml(formatValue(rule.value))}" placeholder="Valor" />
       <button type="button" data-remove-row="${index}">Remover</button>
     </div>`
   }
+  const selectedTheme = themes.find(t => t.code === rule.theme) || themes[0] || { fields: [] }
+  const themeFields = selectedTheme.fields || []
   return `<div class="rule-row">
-    <select class="select" name="theme-${index}">${themes.map(t => `<option value="${t.code}" ${rule.theme===t.code?'selected':''}>${t.label}</option>`).join('')}</select>
-    <input class="input" name="field-${index}" value="${rule.field || ''}" placeholder="Campo" />
+    <select class="select" name="theme-${index}" onchange="window.__campaignThemeChange && window.__campaignThemeChange('${index}', this.value)">${themes.map(t => `<option value="${t.code}" ${rule.theme===t.code?'selected':''}>${t.label}</option>`).join('')}</select>
+    <select class="select" name="field-${index}">${themeFields.map(f => `<option value="${f.field}" ${rule.field===f.field?'selected':''}>${f.label}</option>`).join('')}</select>
     <select class="select" name="operator-${index}">${operatorOptions(rule.operator)}</select>
-    <input class="input" name="value-${index}" value="${formatValue(rule.value)}" placeholder="Valor" />
+    <input class="input" name="value-${index}" value="${escapeHtml(formatValue(rule.value))}" placeholder="Valor" />
     <button type="button" data-remove-row="${index}">Remover</button>
   </div>`
 }
@@ -317,13 +394,28 @@ async function segmentationPage(campaignId) {
     document.getElementById('preview-sql').textContent = campaign.segmentation?.preview_sql || 'Salve a segmentação para gerar a prévia.'
   }
 
+  window.__campaignThemeChange = (index, themeCode) => {
+    const ruleMap = [groupsState.include, groupsState.exclude]
+    ruleMap.forEach(arr => arr.forEach(rule => {
+      if (String(rule.__idx) === String(index)) {
+        const theme = themes.find(t => t.code === themeCode)
+        rule.theme = themeCode
+        rule.field = theme?.fields?.[0]?.field || ''
+      }
+    }))
+    rerenderRules()
+  }
+
   function renderRuleList(containerId, arr, native) {
     const container = document.getElementById(containerId)
     if (!arr.length) {
       container.innerHTML = '<div class="empty">Nenhuma regra configurada.</div>'
       return
     }
-    container.innerHTML = arr.map((rule, index) => ruleRowHtml({ native, index: `${containerId}-${index}`, themes, nativeFields, rule })).join('')
+    container.innerHTML = arr.map((rule, index) => {
+      rule.__idx = `${containerId}-${index}`
+      return ruleRowHtml({ native, index: `${containerId}-${index}`, themes, nativeFields, rule })
+    }).join('')
     container.querySelectorAll('[data-remove-row]').forEach(btn => btn.onclick = () => {
       const idx = Number(btn.getAttribute('data-remove-row').split('-').pop())
       arr.splice(idx, 1)
@@ -333,8 +425,8 @@ async function segmentationPage(campaignId) {
 
   document.getElementById('add-native-include').onclick = () => { groupsState.nativeInclude.push({ field: nativeFields[0]?.field || 'state', operator: 'EQUALS', value: '' }); rerenderRules() }
   document.getElementById('add-native-exclude').onclick = () => { groupsState.nativeExclude.push({ field: nativeFields[0]?.field || 'state', operator: 'EQUALS', value: '' }); rerenderRules() }
-  document.getElementById('add-include').onclick = () => { groupsState.include.push({ theme: themes[0]?.code || 'cartoes', field: '', operator: 'EQUALS', value: '' }); rerenderRules() }
-  document.getElementById('add-exclude').onclick = () => { groupsState.exclude.push({ theme: themes[0]?.code || 'cartoes', field: '', operator: 'EQUALS', value: '' }); rerenderRules() }
+  document.getElementById('add-include').onclick = () => { groupsState.include.push({ theme: themes[0]?.code || 'cartoes', field: themes[0]?.fields?.[0]?.field || '', operator: 'EQUALS', value: '' }); rerenderRules() }
+  document.getElementById('add-exclude').onclick = () => { groupsState.exclude.push({ theme: themes[0]?.code || 'cartoes', field: themes[0]?.fields?.[0]?.field || '', operator: 'EQUALS', value: '' }); rerenderRules() }
 
   document.getElementById('save-segmentation').onclick = async () => {
     const initialAudience = document.getElementById('initial-audience').value
@@ -354,7 +446,7 @@ async function segmentationPage(campaignId) {
     })
     campaign.segmentation = result.segmentation
     rerenderRules()
-    navigate(`/campaigns/${campaignId}/activation`)
+    navigate(`/campaigns/${campaignId}/activation`, { message: 'Segmentação salva com sucesso.', type: 'success' })
   }
 
   function serializeRules(containerId, native) {
@@ -392,10 +484,8 @@ async function segmentationPage(campaignId) {
   rerenderRules()
 }
 
-function normalizeRules(groups, native) {
-  const conditions = (groups || []).flatMap(g => g.conditions || [])
-  if (conditions.length) return conditions
-  return native ? [] : []
+function normalizeRules(groups) {
+  return (groups || []).flatMap(g => g.conditions || [])
 }
 
 async function activationPage(campaignId) {
@@ -409,7 +499,7 @@ async function activationPage(campaignId) {
         <form id="activation-form" class="form-grid">
           <div><label>Modo de materialização</label>
             <select class="select" name="materialization_mode">
-              ${['TABLE','VIEW','MATERIALIZED_VIEW'].map(v => `<option value="${v}" ${activation.materialization_mode===v?'selected':''}>${v}</option>`).join('')}
+              ${['TABLE','VIEW'].map(v => `<option value="${v}" ${activation.materialization_mode===v?'selected':''}>${v}</option>`).join('')}
             </select>
           </div>
           <div><label>Modo de execução</label>
@@ -417,8 +507,8 @@ async function activationPage(campaignId) {
               ${['RUN','PREVIEW'].map(v => `<option value="${v}" ${activation.execution_mode===v?'selected':''}>${v}</option>`).join('')}
             </select>
           </div>
-          <div><label>Data início</label><input class="input" type="date" name="effective_start_date" value="${activation.effective_start_date || campaign.start_date || ''}" /></div>
-          <div><label>Data fim</label><input class="input" type="date" name="effective_end_date" value="${activation.effective_end_date || campaign.end_date || ''}" /></div>
+          <div><label>Data início</label><input class="input" type="date" name="effective_start_date" value="${escapeHtml(activation.effective_start_date || campaign.start_date || '')}" /></div>
+          <div><label>Data fim</label><input class="input" type="date" name="effective_end_date" value="${escapeHtml(activation.effective_end_date || campaign.end_date || '')}" /></div>
           <div class="footer-actions full"><a href="/campaigns/${campaignId}/segmentation" data-link><button type="button" class="ghost">Voltar</button></a><button class="primary" type="submit">Ativar campanha</button></div>
         </form>
       </div>
@@ -441,15 +531,43 @@ async function activationPage(campaignId) {
         effective_end_date: form.get('effective_end_date'),
       }),
     })
-    navigate('/')
+    navigate(`/campaigns/${campaignId}/preparation`, { message: 'Campanha ativada com sucesso.', type: 'success' })
   }
 }
 
+function bindCampaignActions() {
+  document.querySelectorAll('[data-delete-campaign]').forEach((button) => {
+    button.onclick = async () => {
+      const campaignId = button.getAttribute('data-delete-campaign')
+      if (!window.confirm('Deseja realmente excluir a campanha? Essa ação remove metadados, histórico e audiência materializada.')) return
+      await api(`/api/campaigns/${campaignId}`, { method: 'DELETE' })
+      navigate('/', { message: 'Campanha excluída com sucesso.', type: 'success' })
+    }
+  })
+
+  document.querySelectorAll('[data-status-action]').forEach((button) => {
+    button.onclick = async () => {
+      const [campaignId, newStatus] = button.getAttribute('data-status-action').split('|')
+      const reason = window.prompt(`Informe o motivo para alterar o status para ${statusLabel[newStatus] || newStatus}:`, '') || ''
+      await api(`/api/campaigns/${campaignId}/status`, {
+        method: 'POST',
+        body: JSON.stringify({ new_status: newStatus, reason }),
+      })
+      if (window.location.pathname.includes(`/campaigns/${campaignId}/`)) {
+        navigate(`/campaigns/${campaignId}/preparation`, { message: `Status alterado para ${statusLabel[newStatus] || newStatus}.`, type: 'success' })
+      } else {
+        navigate('/', { message: `Status alterado para ${statusLabel[newStatus] || newStatus}.`, type: 'success' })
+      }
+    }
+  })
+}
+
 function escapeHtml(value) {
-  return String(value)
+  return String(value ?? '')
     .replaceAll('&', '&amp;')
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
 }
 
 async function render() {

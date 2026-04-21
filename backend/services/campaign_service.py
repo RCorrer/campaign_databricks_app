@@ -1,5 +1,4 @@
 import json
-from datetime import datetime
 from uuid import uuid4
 
 from backend.core.config import settings
@@ -14,7 +13,6 @@ from backend.models.contracts import (
 )
 from backend.repositories.databricks_sql import sql_repository
 from backend.services.query_builder import QueryBuilderService
-from backend.utils.mapping_loader import load_semantic_mapping
 
 
 STATUS_LABELS = {
@@ -26,6 +24,17 @@ STATUS_LABELS = {
     'CONCLUIDO': 'Concluído',
     'ENCERRADO': 'Encerrado',
     'CANCELADO': 'Cancelado',
+}
+
+ALLOWED_TRANSITIONS = {
+    'PREPARACAO': ['CANCELADO'],
+    'SEGMENTACAO': ['PREPARACAO', 'CANCELADO'],
+    'ATIVACAO': ['SEGMENTACAO', 'CANCELADO'],
+    'ATIVO': ['PAUSADO', 'CONCLUIDO', 'ENCERRADO', 'CANCELADO'],
+    'PAUSADO': ['ATIVO', 'ENCERRADO', 'CANCELADO'],
+    'CONCLUIDO': [],
+    'ENCERRADO': [],
+    'CANCELADO': [],
 }
 
 
@@ -63,6 +72,7 @@ class CampaignService:
                 'start_date': row.get('start_date'),
                 'end_date': row.get('end_date'),
                 'version': int(row.get('current_version') or 1),
+                'allowed_transitions': self._allowed_transitions(row.get('status')),
             }
             for row in rows
         ]
@@ -116,6 +126,33 @@ class CampaignService:
         ])
         return self.get_campaign(campaign_id)
 
+    def delete_campaign(self, campaign_id: str) -> dict:
+        self._ensure_campaign_exists(campaign_id)
+        activation_objects = sql_repository.execute(f"""
+            SELECT activation_object_name
+            FROM {settings.metadata_namespace}.campaign_activation_version
+            WHERE campaign_id = {q(campaign_id)}
+              AND activation_object_name IS NOT NULL
+        """)
+        scripts = []
+        for row in activation_objects:
+            obj = row.get('activation_object_name')
+            if obj:
+                scripts.append(f"DROP TABLE IF EXISTS {obj}")
+                scripts.append(f"DROP VIEW IF EXISTS {obj}")
+        scripts += [
+            f"DELETE FROM {settings.execution_namespace}.campaign_audience WHERE campaign_id = {q(campaign_id)}",
+            f"DELETE FROM {settings.execution_namespace}.campaign_run_log WHERE campaign_id = {q(campaign_id)}",
+            f"DELETE FROM {settings.metadata_namespace}.campaign_activation_version WHERE campaign_id = {q(campaign_id)}",
+            f"DELETE FROM {settings.metadata_namespace}.campaign_segmentation_version WHERE campaign_id = {q(campaign_id)}",
+            f"DELETE FROM {settings.metadata_namespace}.campaign_briefing_version WHERE campaign_id = {q(campaign_id)}",
+            f"DELETE FROM {settings.metadata_namespace}.campaign_status_history WHERE campaign_id = {q(campaign_id)}",
+            f"DELETE FROM {settings.metadata_namespace}.campaign_audit_event WHERE campaign_id = {q(campaign_id)}",
+            f"DELETE FROM {settings.metadata_namespace}.campaign_header WHERE campaign_id = {q(campaign_id)}",
+        ]
+        sql_repository.execute_script(scripts)
+        return {'deleted': True, 'campaign_id': campaign_id}
+
     def get_campaign(self, campaign_id: str) -> dict:
         rows = sql_repository.execute(f"""
             SELECT *
@@ -141,6 +178,7 @@ class CampaignService:
             'description': header.get('description'),
             'status': status,
             'status_label': STATUS_LABELS.get(status, status),
+            'allowed_transitions': self._allowed_transitions(status),
             'start_date': row.get('start_date'),
             'end_date': row.get('end_date'),
             'version': int(row.get('current_version') or 1),
@@ -250,9 +288,9 @@ class CampaignService:
               {q(payload.execution_mode)} AS execution_mode
             FROM ({segmentation['preview_sql']}) src
         """
-        activation_sql = f"CREATE OR REPLACE TABLE {object_name} AS {audience_select}"
+        object_ddl = f"CREATE OR REPLACE {payload.materialization_mode} {object_name} AS {audience_select}" if payload.materialization_mode != 'TABLE' else f"CREATE OR REPLACE TABLE {object_name} AS {audience_select}"
         sql_repository.execute_script([
-            activation_sql,
+            object_ddl,
             f"DELETE FROM {settings.execution_namespace}.campaign_audience WHERE campaign_id = {q(campaign_id)} AND segmentation_version = {version}",
             f"INSERT INTO {settings.execution_namespace}.campaign_audience {audience_select}",
             f"DELETE FROM {settings.execution_namespace}.campaign_run_log WHERE campaign_id = {q(campaign_id)} AND segmentation_version = {version}",
@@ -272,7 +310,7 @@ class CampaignService:
               campaign_id, version_id, materialization_mode, activation_object_name, activation_sql,
               effective_start_date, effective_end_date, activation_status, activated_at, activated_by
             ) VALUES (
-              {q(campaign_id)}, {version}, {q(payload.materialization_mode)}, {q(object_name)}, {q(activation_sql)},
+              {q(campaign_id)}, {version}, {q(payload.materialization_mode)}, {q(object_name)}, {q(object_ddl)},
               {date_or_null(payload.effective_start_date)}, {date_or_null(payload.effective_end_date)}, 'ATIVO', current_timestamp(), current_user()
             )
             """,
@@ -288,6 +326,9 @@ class CampaignService:
             f"SELECT status FROM {settings.metadata_namespace}.campaign_header WHERE campaign_id = {q(campaign_id)}",
             'PREPARACAO',
         )
+        allowed = self._allowed_transitions(current_status)
+        if payload.new_status not in allowed:
+            raise ValueError(f'Transição inválida: {current_status} -> {payload.new_status}')
         sql_repository.execute_script([
             f"UPDATE {settings.metadata_namespace}.campaign_header SET status = {q(payload.new_status)}, updated_at = current_timestamp(), updated_by = current_user() WHERE campaign_id = {q(campaign_id)}",
             self._status_history_sql(campaign_id, current_status, payload.new_status, payload.reason),
@@ -327,6 +368,9 @@ class CampaignService:
           {q(campaign_id)}, {q(event_name)}, {q(json.dumps(payload, ensure_ascii=False))}, current_timestamp(), current_user()
         )
         """
+
+    def _allowed_transitions(self, status: str | None) -> list[str]:
+        return ALLOWED_TRANSITIONS.get(status or 'PREPARACAO', [])
 
 
 campaign_service = CampaignService()
@@ -374,10 +418,3 @@ def parse_array(value):
         except Exception:
             return []
     return [item.strip() for item in text.strip('{}').split(',') if item.strip()]
-
-
-def _find_audience_view(audiences: list[dict], audience_code: str) -> str:
-    for audience in audiences:
-        if audience.get('code') == audience_code:
-            return audience['source_view']
-    raise ValueError(f'Público inicial não encontrado: {audience_code}')
