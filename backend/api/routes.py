@@ -48,11 +48,7 @@ def get_themes():
 
 
 @router.get("/dashboard/campaigns")
-def get_dashboard_campaigns(
-    status: str | None = Query(default=None),
-    theme: str | None = Query(default=None),
-    search: str | None = Query(default=None),
-):
+def get_dashboard_campaigns(status: str | None = Query(default=None), theme: str | None = Query(default=None), search: str | None = Query(default=None)):
     try:
         return dashboard_service.list_campaigns(status=status, theme=theme, search=search)
     except Exception as exc:
@@ -81,6 +77,8 @@ def get_campaign(campaign_id: str):
 def update_campaign(campaign_id: str, req: CampaignUpdateRequest):
     try:
         return campaign_service.update_campaign(campaign_id, req)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
@@ -89,6 +87,8 @@ def update_campaign(campaign_id: str, req: CampaignUpdateRequest):
 def delete_campaign(campaign_id: str):
     try:
         return campaign_service.delete_campaign(campaign_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
@@ -97,6 +97,8 @@ def delete_campaign(campaign_id: str):
 def save_briefing(campaign_id: str, req: CampaignBriefingRequest):
     try:
         return campaign_service.save_briefing(campaign_id, req)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
@@ -105,6 +107,8 @@ def save_briefing(campaign_id: str, req: CampaignBriefingRequest):
 def save_segmentation(campaign_id: str, req: SegmentationSaveRequest):
     try:
         return campaign_service.save_segmentation(campaign_id, req)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
@@ -121,15 +125,21 @@ def preview_segmentation(campaign_id: str, req: SegmentationSaveRequest):
 def activate_campaign(campaign_id: str, req: ActivationRequest):
     try:
         return execution_service.activate_campaign(campaign_id, req)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.post("/campaigns/{campaign_id}/status")
-def change_status(campaign_id: str, req: StatusChangeRequest):
+def change_campaign_status(campaign_id: str, req: StatusChangeRequest):
     try:
         return campaign_service.change_status(campaign_id, req)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        detail = str(exc)
+        status_code = 409 if "alterada ou excluída" in detail else 400
+        if detail == "Campanha não encontrada":
+            status_code = 404
+        raise HTTPException(status_code=status_code, detail=detail) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
