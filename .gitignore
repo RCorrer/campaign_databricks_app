@@ -1,7 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.sqlite3
+.venv/
+venv/
+env/
+
+# Node
 node_modules/
 dist/
-__pycache__/
-*.pyc
-.venv/
+.vite/
+
+# Environment
 .env
-npm-debug.log*
+.env.local
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Databricks
+.databricks/

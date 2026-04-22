@@ -1,32 +1,24 @@
-import { Link, NavLink } from 'react-router-dom'
+import { Link } from "react-router-dom";
 
-export default function Layout({ children }) {
+export default function Layout({ title, children }) {
   return (
-    <div className="shell">
-      <aside className="sidebar">
-        <Link to="/" className="brand">
-          <span className="brand-mark">CO</span>
-          <div>
-            <strong>Campaign Orchestrator</strong>
-            <small>Databricks App</small>
-          </div>
-        </Link>
-
-        <nav className="nav">
-          <NavLink to="/" end className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>Campanhas</NavLink>
-          <NavLink to="/flow" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>Fluxo</NavLink>
+    <div className="app-shell">
+      <header className="app-header">
+        <div>
+          <Link to="/" className="brand">Campaign CRM/CDP</Link>
+          <p className="brand-subtitle">Databricks App</p>
+        </div>
+        <nav>
+          <Link className="nav-link" to="/">Dashboard</Link>
+          <Link className="nav-link" to="/campaigns/new/preparation">Nova campanha</Link>
         </nav>
-      </aside>
-
-      <div className="content">
-        <header className="topbar">
-          <div>
-            <p className="eyebrow">Arquitetura inspirada em Salesforce Workflow + Data Cloud</p>
-            <h1>Gestão de campanhas com briefing, segmentação e ativação</h1>
-          </div>
-        </header>
+      </header>
+      <main className="page-shell">
+        <div className="page-title-row">
+          <h1>{title}</h1>
+        </div>
         {children}
-      </div>
+      </main>
     </div>
-  )
+  );
 }

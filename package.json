@@ -1,9 +1,9 @@
 {
   "name": "campaign-databricks-app",
   "private": true,
-  "version": "2.1.0",
-  "type": "module",
+  "version": "1.0.0",
   "scripts": {
-    "build": "node scripts/noop-build.mjs"
+    "dev": "vite --config frontend/vite.config.js",
+    "build": "vite build --config frontend/vite.config.js"
   }
 }

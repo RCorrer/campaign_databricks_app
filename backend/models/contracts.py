@@ -1,97 +1,67 @@
 from typing import Any, Literal
+
 from pydantic import BaseModel, Field
 
 
-CampaignStatus = Literal[
-    'PREPARACAO',
-    'SEGMENTACAO',
-    'ATIVACAO',
-    'ATIVO',
-    'PAUSADO',
-    'CONCLUIDO',
-    'ENCERRADO',
-    'CANCELADO',
-]
-
-
-class CampaignCreate(BaseModel):
+class CampaignCreateRequest(BaseModel):
     name: str
-    objective: str
     theme: str
+    objective: str
     strategy: str
+    description: str | None = None
+    primary_channel: str
+    priority: str
+    owner_team: str | None = None
+    goal_kpi: str | None = None
+    goal_value: float | None = None
     start_date: str
     end_date: str
-    periodicity: Literal['DIARIA', 'SEMANAL', 'MENSAL', 'PONTUAL']
+    periodicity: str = "MENSAL"
     max_impacts_month: int = 1
-    control_group_enabled: bool = True
-    description: str | None = None
+    control_group_enabled: bool = False
 
 
+class CampaignUpdateRequest(CampaignCreateRequest):
+    status_reason: str | None = None
 
 
-class CampaignUpdate(BaseModel):
-    name: str
-    objective: str
-    theme: str
-    strategy: str
-    start_date: str | None = None
-    end_date: str | None = None
-    periodicity: Literal['DIARIA', 'SEMANAL', 'MENSAL', 'PONTUAL'] = 'MENSAL'
-    max_impacts_month: int = 1
-    control_group_enabled: bool = True
-    description: str | None = None
-
-
-class BriefingPayload(BaseModel):
+class CampaignBriefingRequest(BaseModel):
     challenge: str
     target_business_outcome: str
     channels: list[str] = Field(default_factory=list)
-    constraints: list[str] = Field(default_factory=list)
-    business_rules: list[str] = Field(default_factory=list)
+    constraints: str | None = None
+    business_rules: str | None = None
     notes: str | None = None
 
 
-class RuleCondition(BaseModel):
+class NativeRule(BaseModel):
     field: str
     operator: str
     value: Any
-    logical_connector: Literal['AND', 'OR'] = 'AND'
-    theme: str | None = None
-    entity: str | None = None
-    source_scope: Literal['NATIVE', 'THEMATIC'] = 'NATIVE'
 
 
-class RuleGroup(BaseModel):
-    name: str
-    conditions: list[RuleCondition] = Field(default_factory=list)
+class ThematicRule(BaseModel):
+    theme: str
+    field: str
+    operator: str
+    value: Any
 
 
-class SegmentationPayload(BaseModel):
+class SegmentationSaveRequest(BaseModel):
     initial_audience_code: str
-    universe_view: str
-    native_include_groups: list[RuleGroup] = Field(default_factory=list)
-    native_exclude_groups: list[RuleGroup] = Field(default_factory=list)
-    include_groups: list[RuleGroup] = Field(default_factory=list)
-    exclude_groups: list[RuleGroup] = Field(default_factory=list)
-    save_as_version_note: str | None = None
+    initial_audience_view: str
+    native_rules: list[NativeRule] = Field(default_factory=list)
+    include_rules: list[ThematicRule] = Field(default_factory=list)
+    exclude_rules: list[ThematicRule] = Field(default_factory=list)
 
 
-class StatusChangePayload(BaseModel):
-    new_status: CampaignStatus
-    reason: str | None = None
-
-
-class ActivationPayload(BaseModel):
-    materialization_mode: Literal['TABLE', 'VIEW', 'MATERIALIZED_VIEW'] = 'TABLE'
-    execution_mode: Literal['PREVIEW', 'RUN'] = 'RUN'
-    effective_start_date: str
-    effective_end_date: str
-
-
-class CampaignSummary(BaseModel):
-    campaign_id: str
-    name: str
-    status: CampaignStatus
+class ActivationRequest(BaseModel):
+    segmentation_version_no: int
+    activation_mode: Literal["SNAPSHOT", "REFRESH"] = "SNAPSHOT"
     start_date: str
     end_date: str
-    version: int
+
+
+class StatusChangeRequest(BaseModel):
+    new_status: str
+    reason: str | None = None

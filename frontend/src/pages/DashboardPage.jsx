@@ -1,58 +1,73 @@
-import { useMemo, useState } from 'react'
-import CampaignCard from '../components/CampaignCard'
+import { useEffect, useState } from "react";
+import Layout from "../components/Layout";
+import FilterBar from "../components/FilterBar";
+import CampaignCard from "../components/CampaignCard";
+import ConfirmModal from "../components/ConfirmModal";
+import Toast from "../components/Toast";
+import { api } from "../api/client";
+import { useToast } from "../hooks/useToast";
 
-export default function DashboardPage({ campaigns }) {
-  const [search, setSearch] = useState('')
-  const [status, setStatus] = useState('TODOS')
+export default function DashboardPage() {
+  const [campaigns, setCampaigns] = useState([]);
+  const [filters, setFilters] = useState({ search: "", status: "", theme: "" });
+  const [campaignToDelete, setCampaignToDelete] = useState(null);
+  const { toast, show } = useToast();
 
-  const filteredCampaigns = useMemo(() => {
-    return campaigns.filter((campaign) => {
-      const normalizedSearch = search.toLowerCase().trim()
-      const matchesSearch = !normalizedSearch || [
-        campaign.campaign_id,
-        campaign.name,
-        campaign.theme,
-        campaign.strategy,
-        campaign.objective
-      ].some((value) => String(value).toLowerCase().includes(normalizedSearch))
+  async function loadCampaigns() {
+    const params = new URLSearchParams();
+    if (filters.search) params.set("search", filters.search);
+    if (filters.status) params.set("status", filters.status);
+    if (filters.theme) params.set("theme", filters.theme);
+    const data = await api.get(`/api/dashboard/campaigns?${params.toString()}`);
+    setCampaigns(data);
+  }
 
-      const matchesStatus = status === 'TODOS' || campaign.status === status
-      return matchesSearch && matchesStatus
-    })
-  }, [campaigns, search, status])
+  useEffect(() => {
+    loadCampaigns().catch((error) => show(error.message, "error"));
+  }, []);
 
-  const statusOptions = ['TODOS', 'PREPARACAO', 'SEGMENTACAO', 'ATIVACAO', 'ATIVO', 'PAUSADO', 'CONCLUIDO', 'ENCERRADO', 'CANCELADO']
+  async function handleDelete() {
+    if (!campaignToDelete) return;
+    await api.del(`/api/campaigns/${campaignToDelete.campaign_id}`);
+    show("Campanha excluída com sucesso");
+    setCampaignToDelete(null);
+    loadCampaigns().catch((error) => show(error.message, "error"));
+  }
+
+  async function handleStatusChange(campaign, newStatus) {
+    try {
+      await api.post(`/api/campaigns/${campaign.campaign_id}/status`, {
+        new_status: newStatus,
+        reason: `Mudança rápida via dashboard para ${newStatus}`,
+      });
+      show(`Status alterado para ${newStatus}`);
+      loadCampaigns();
+    } catch (error) {
+      show(error.message, "error");
+    }
+  }
 
   return (
-    <section className="page-stack">
-      <div className="card hero-banner">
-        <div>
-          <p className="eyebrow">Página inicial</p>
-          <h2>Campanhas</h2>
-          <p className="muted">Visualize campanhas de forma resumida, pesquise e filtre por status.</p>
-        </div>
-        <div className="hero-stats">
-          <div><strong>{campaigns.length}</strong><span>Total</span></div>
-          <div><strong>{campaigns.filter((item) => item.status === 'ATIVO').length}</strong><span>Ativas</span></div>
-          <div><strong>{campaigns.filter((item) => item.status === 'PAUSADO').length}</strong><span>Pausadas</span></div>
-        </div>
+    <Layout title="Campanhas">
+      <Toast toast={toast} />
+      <FilterBar filters={filters} setFilters={setFilters} onReload={() => loadCampaigns().catch((error) => show(error.message, "error"))} />
+      <div className="campaign-grid">
+        {campaigns.map((campaign) => (
+          <CampaignCard
+            key={campaign.campaign_id}
+            campaign={campaign}
+            onDelete={setCampaignToDelete}
+            onStatusChange={handleStatusChange}
+          />
+        ))}
       </div>
-
-      <div className="filters card">
-        <input
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          placeholder="Buscar por nome, código, tema ou estratégia"
-        />
-
-        <select value={status} onChange={(event) => setStatus(event.target.value)}>
-          {statusOptions.map((option) => <option key={option} value={option}>{option}</option>)}
-        </select>
-      </div>
-
-      <div className="cards-grid">
-        {filteredCampaigns.map((campaign) => <CampaignCard key={campaign.campaign_id} campaign={campaign} />)}
-      </div>
-    </section>
-  )
+      <ConfirmModal
+        open={Boolean(campaignToDelete)}
+        title="Excluir campanha"
+        text={`Deseja excluir a campanha "${campaignToDelete?.campaign_name}"?`}
+        onConfirm={handleDelete}
+        onCancel={() => setCampaignToDelete(null)}
+      />
+    </Layout>
+  );
 }
