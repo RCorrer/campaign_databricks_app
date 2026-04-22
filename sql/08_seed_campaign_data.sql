@@ -163,20 +163,21 @@ FROM range(1, 21);
 
 INSERT INTO main.campaign_app.campaign_status_history (
   campaign_id,
-  previous_status,
-  new_status,
+  from_status,
+  to_status,
   reason,
   changed_at,
   changed_by
 )
 SELECT
   concat('CAMP_', lpad(cast(id as string), 4, '0')),
-  NULL as previous_status,
-  CASE WHEN id % 4 = 0 THEN 'ATIVO'
-       WHEN id % 4 = 1 THEN 'PREPARACAO'
-       WHEN id % 4 = 2 THEN 'SEGMENTACAO'
-       ELSE 'PAUSADO'
-  END as new_status,
+  NULL as from_status,
+  CASE
+    WHEN id % 4 = 0 THEN 'ATIVO'
+    WHEN id % 4 = 1 THEN 'PREPARACAO'
+    WHEN id % 4 = 2 THEN 'SEGMENTACAO'
+    ELSE 'PAUSADO'
+  END as to_status,
   'Carga inicial' as reason,
   current_timestamp() as changed_at,
   'system' as changed_by
