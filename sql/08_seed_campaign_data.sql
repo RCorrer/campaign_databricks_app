@@ -7,7 +7,31 @@ DELETE FROM main.campaign_app.campaign_segmentation_version;
 DELETE FROM main.campaign_app.campaign_briefing_version;
 DELETE FROM main.campaign_app.campaign_header;
 
-INSERT INTO main.campaign_app.campaign_header
+INSERT INTO main.campaign_app.campaign_header (
+  campaign_id,
+  campaign_name,
+  theme,
+  objective,
+  strategy,
+  description,
+  primary_channel,
+  priority,
+  owner_team,
+  goal_kpi,
+  goal_value,
+  status,
+  status_reason,
+  periodicity,
+  start_date,
+  end_date,
+  max_impacts_month,
+  control_group_enabled,
+  last_run_at,
+  created_at,
+  updated_at,
+  created_by,
+  updated_by
+)
 SELECT
   concat('CAMP_', lpad(cast(id as string), 4, '0')) as campaign_id,
   concat('Campanha ', id) as campaign_name,
@@ -45,7 +69,19 @@ SELECT
   'system' as updated_by
 FROM range(1, 21);
 
-INSERT INTO main.campaign_app.campaign_briefing_version
+INSERT INTO main.campaign_app.campaign_briefing_version (
+  campaign_id,
+  version_no,
+  challenge,
+  target_business_outcome,
+  channels_json,
+  constraints,
+  business_rules,
+  notes,
+  is_current,
+  created_at,
+  created_by
+)
 SELECT
   concat('CAMP_', lpad(cast(id as string), 4, '0')),
   1,
@@ -60,7 +96,22 @@ SELECT
   'system'
 FROM range(1, 21);
 
-INSERT INTO main.campaign_app.campaign_segmentation_version
+INSERT INTO main.campaign_app.campaign_segmentation_version (
+  campaign_id,
+  version_no,
+  initial_audience_code,
+  initial_audience_view,
+  native_rules_json,
+  include_rules_json,
+  exclude_rules_json,
+  native_rule_count,
+  thematic_rule_count,
+  generated_sql,
+  estimated_count,
+  is_current,
+  created_at,
+  created_by
+)
 SELECT
   concat('CAMP_', lpad(cast(id as string), 4, '0')),
   1,
@@ -81,7 +132,20 @@ SELECT
   'system'
 FROM range(1, 21);
 
-INSERT INTO main.campaign_app.campaign_activation_version
+INSERT INTO main.campaign_app.campaign_activation_version (
+  campaign_id,
+  version_no,
+  segmentation_version_no,
+  execution_target_name,
+  activation_mode,
+  start_date,
+  end_date,
+  activated_at,
+  deactivated_at,
+  is_current,
+  created_at,
+  created_by
+)
 SELECT
   concat('CAMP_', lpad(cast(id as string), 4, '0')),
   1,
@@ -97,16 +161,35 @@ SELECT
   'system'
 FROM range(1, 21);
 
-INSERT INTO main.campaign_app.campaign_status_history
+INSERT INTO main.campaign_app.campaign_status_history (
+  campaign_id,
+  previous_status,
+  new_status,
+  reason,
+  changed_at,
+  changed_by
+)
 SELECT
   concat('CAMP_', lpad(cast(id as string), 4, '0')),
-  CASE WHEN id % 2 = 0 THEN 'ATIVO' ELSE 'PREPARACAO' END,
-  'Carga inicial',
-  current_timestamp(),
-  'system'
+  NULL as previous_status,
+  CASE WHEN id % 4 = 0 THEN 'ATIVO'
+       WHEN id % 4 = 1 THEN 'PREPARACAO'
+       WHEN id % 4 = 2 THEN 'SEGMENTACAO'
+       ELSE 'PAUSADO'
+  END as new_status,
+  'Carga inicial' as reason,
+  current_timestamp() as changed_at,
+  'system' as changed_by
 FROM range(1, 21);
 
-INSERT INTO main.campaign_app.campaign_audit_event
+INSERT INTO main.campaign_app.campaign_audit_event (
+  audit_id,
+  campaign_id,
+  event_type,
+  event_description,
+  created_at,
+  created_by
+)
 SELECT
   concat('AUDIT_', lpad(cast(id as string), 6, '0')),
   concat('CAMP_', lpad(cast(id as string), 4, '0')),
@@ -116,7 +199,18 @@ SELECT
   'system'
 FROM range(1, 21);
 
-INSERT INTO main.campaign_execution.campaign_run_log
+INSERT INTO main.campaign_execution.campaign_run_log (
+  run_id,
+  campaign_id,
+  segmentation_version_no,
+  activation_version_no,
+  status,
+  started_at,
+  finished_at,
+  row_count,
+  executed_sql,
+  error_message
+)
 SELECT
   concat('RUN_', lpad(cast(id as string), 6, '0')),
   concat('CAMP_', lpad(cast(id as string), 4, '0')),
