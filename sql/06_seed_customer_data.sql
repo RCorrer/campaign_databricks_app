@@ -26,7 +26,7 @@ SELECT
   CAST(1500 + (id * 137 % 60000) AS DECIMAL(18,2)) as renda_mensal,
   CASE WHEN (1500 + (id * 137 % 60000)) >= 25000 THEN 'ALTA' WHEN (1500 + (id * 137 % 60000)) >= 10000 THEN 'MEDIA' ELSE 'BAIXA' END as faixa_renda,
   CAST(5000 + (id * 999 % 1000000) AS DECIMAL(18,2)) as patrimonio_estimado,
-  date_sub(current_date(), 365 + (id % 3000)) as data_relacionamento_inicio,
+  date_sub(current_date(), CAST((365 + (id % 3000)) AS INT)) as data_relacionamento_inicio,
   CASE WHEN id % 4 = 0 THEN 'RELACIONAMENTO_FORTE' ELSE 'RELACIONAMENTO_PADRAO' END as cluster_relacionamento,
   CASE WHEN id % 3 = 0 THEN true ELSE false END as is_prime,
   CASE WHEN id % 5 = 0 THEN true ELSE false END as is_exclusive,
