@@ -190,7 +190,7 @@ class ExecutionService:
                 """
             )
 
-            if current_status != "ATIVO":
+            if current_status != 'ATIVO':
                 self.repo.execute(
                     f"""
                     INSERT INTO main.campaign_app.campaign_status_history (
@@ -225,14 +225,14 @@ class ExecutionService:
                     {sql_literal(campaign_id)},
                     'ACTIVATE_CAMPAIGN',
                     {sql_literal(json.dumps({
-                        "run_id": run_id,
-                        "segmentation_version_no": req.segmentation_version_no,
-                        "activation_version_no": activation_version_no,
-                        "activation_mode": req.activation_mode,
-                        "start_date": req.start_date,
-                        "end_date": req.end_date,
-                        "initial_audience_code": initial_audience_code,
-                        "row_count": row_count,
+                        'run_id': run_id,
+                        'segmentation_version_no': req.segmentation_version_no,
+                        'activation_version_no': activation_version_no,
+                        'activation_mode': req.activation_mode,
+                        'start_date': req.start_date,
+                        'end_date': req.end_date,
+                        'initial_audience_code': initial_audience_code,
+                        'row_count': row_count,
                     }))},
                     current_timestamp(),
                     'app'
@@ -241,16 +241,15 @@ class ExecutionService:
             )
 
             return {
-                "campaign_id": campaign_id,
-                "run_id": run_id,
-                "segmentation_version_no": req.segmentation_version_no,
-                "activation_version_no": activation_version_no,
-                "row_count": row_count,
+                'campaign_id': campaign_id,
+                'run_id': run_id,
+                'segmentation_version_no': req.segmentation_version_no,
+                'activation_version_no': activation_version_no,
+                'row_count': row_count,
             }
 
         except Exception as exc:
             safe_error = str(exc).replace("'", "''")
-
             self.repo.execute(
                 f"""
                 UPDATE main.campaign_execution.campaign_run_log

@@ -430,62 +430,47 @@ class CampaignService:
         if req.new_status not in allowed:
             raise ValueError(f"Transição inválida: {current_status} -> {req.new_status}")
 
-        try:
-            self.repo.execute_script(
-                [
-                    f"""
-                    UPDATE main.campaign_app.campaign_header
-                       SET status = {sql_literal(req.new_status)},
-                           status_reason = {sql_literal(req.reason)},
-                           updated_at = current_timestamp(),
-                           updated_by = 'app'
-                     WHERE campaign_id = {sql_literal(campaign_id)}
-                    """,
-                    f"""
-                    INSERT INTO main.campaign_app.campaign_status_history (
-                        campaign_id,
-                        from_status,
-                        to_status,
-                        reason,
-                        changed_at,
-                        changed_by
-                    )
-                    VALUES (
-                        {sql_literal(campaign_id)},
-                        {sql_literal(current_status)},
-                        {sql_literal(req.new_status)},
-                        {sql_literal(req.reason)},
-                        current_timestamp(),
-                        'app'
-                    )
-                    """,
-                    f"""
-                    INSERT INTO main.campaign_app.campaign_audit_event (
-                        campaign_id,
-                        event_type,
-                        payload_json,
-                        created_at,
-                        created_by
-                    )
-                    VALUES (
-                        {sql_literal(campaign_id)},
-                        'CHANGE_STATUS',
-                        {sql_literal(json.dumps({
-                            "from_status": current_status,
-                            "to_status": req.new_status,
-                            "reason": req.reason,
-                        }))},
-                        current_timestamp(),
-                        'app'
-                    )
-                    """,
-                ],
-                retries=1,
+        self.repo.execute(
+            f"""
+            UPDATE main.campaign_app.campaign_header
+               SET status = {sql_literal(req.new_status)},
+                   status_reason = {sql_literal(req.reason)},
+                   updated_at = current_timestamp(),
+                   updated_by = 'app'
+             WHERE campaign_id = {sql_literal(campaign_id)}
+            """
+        )
+
+        self.repo.execute(
+            f"""
+            INSERT INTO main.campaign_app.campaign_status_history (
+                campaign_id,
+                from_status,
+                to_status,
+                reason,
+                changed_at,
+                changed_by
             )
-        except RuntimeError as exc:
-            if "DELTA_CONCURRENT_DELETE_READ" in str(exc):
-                raise ValueError("A campanha foi alterada ou excluída em outra ação.") from exc
-            raise
+            VALUES (
+                {sql_literal(campaign_id)},
+                {sql_literal(current_status)},
+                {sql_literal(req.new_status)},
+                {sql_literal(req.reason)},
+                current_timestamp(),
+                'app'
+            )
+            """
+        )
+
+        self._insert_audit_event(
+            campaign_id=campaign_id,
+            event_type="CHANGE_STATUS",
+            payload={
+                "from_status": current_status,
+                "to_status": req.new_status,
+                "reason": req.reason,
+            },
+        )
 
         return {
             "campaign_id": campaign_id,
