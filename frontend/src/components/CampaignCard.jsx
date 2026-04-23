@@ -1,41 +1,27 @@
 import { Link } from 'react-router-dom'
 
-export default function CampaignCard({ campaign }) {
+export default function CampaignCard({ campanha, onDelete, onStatusChange }) {
   return (
     <article className="card campaign-card">
-      <div className="campaign-card-top">
+      <div className="card-header">
         <div>
-          <p className="campaign-code">{campaign.campaign_id}</p>
-          <h3>{campaign.name}</h3>
+          <h3>{campanha.nome}</h3>
+          <p>{campanha.descricao || campanha.objetivo || 'Sem descrição'}</p>
         </div>
-        <span className={`status-pill status-${campaign.status.toLowerCase()}`}>{campaign.status_label}</span>
+        <span className="status-pill">{campanha.rotulo_status}</span>
       </div>
-
-      <div className="campaign-grid-info">
-        <div>
-          <span>Tema</span>
-          <strong>{campaign.theme}</strong>
-        </div>
-        <div>
-          <span>Estratégia</span>
-          <strong>{campaign.strategy}</strong>
-        </div>
-        <div>
-          <span>Vigência</span>
-          <strong>{campaign.start_date} a {campaign.end_date}</strong>
-        </div>
-        <div>
-          <span>Versão</span>
-          <strong>v{campaign.version}</strong>
-        </div>
+      <div className="meta-grid">
+        <span><strong>ID</strong>{campanha.id_campanha}</span>
+        <span><strong>Tema</strong>{campanha.tema || '-'}</span>
+        <span><strong>Vigência</strong>{campanha.data_inicio || '-'} a {campanha.data_fim || '-'}</span>
+        <span><strong>Versão</strong>{campanha.versao}</span>
       </div>
-
-      <p className="muted">{campaign.objective}</p>
-
-      <div className="campaign-actions">
-        <Link className="button secondary" to={`/campaigns/${campaign.campaign_id}/preparation`}>Preparação</Link>
-        <Link className="button secondary" to={`/campaigns/${campaign.campaign_id}/segmentation`}>Segmentação</Link>
-        <Link className="button secondary" to={`/campaigns/${campaign.campaign_id}/activation`}>Ativação</Link>
+      <div className="actions">
+        <Link className="btn primary" to={`/campanhas/${campanha.id_campanha}`}>Abrir fluxo</Link>
+        {(campanha.transicoes_permitidas || []).map((status) => (
+          <button key={status} className="btn" onClick={() => onStatusChange(campanha, status)}>{status}</button>
+        ))}
+        <button className="btn danger" onClick={() => onDelete(campanha)}>Excluir</button>
       </div>
     </article>
   )
