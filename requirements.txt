@@ -1,7 +1,5 @@
 fastapi
 uvicorn
-pydantic
 pydantic-settings
-databricks-sdk
 pyyaml
-python-multipart
+databricks-sdk

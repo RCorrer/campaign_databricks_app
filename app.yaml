@@ -9,7 +9,13 @@ command:
 env:
   - name: DATABRICKS_WAREHOUSE_ID
     valueFrom: sql-warehouse
-
-resources:
-  sql_warehouses:
-    - name: primary_warehouse
+  - name: UC_CATALOG
+    value: main
+  - name: UC_METADATA_SCHEMA
+    value: campaign_app
+  - name: UC_BUSINESS_SCHEMA
+    value: customer_360
+  - name: CAMPAIGN_SOURCE_SCHEMA
+    value: campaign_sources
+  - name: CAMPAIGN_MAPPING_FILE
+    value: config/semantic_mapping.yaml

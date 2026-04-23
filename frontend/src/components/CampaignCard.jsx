@@ -1,31 +1,42 @@
-import { Link } from "react-router-dom";
-import CampaignStatusBadge from "./CampaignStatusBadge";
-import { formatDate } from "../utils/formatters";
+import { Link } from 'react-router-dom'
 
-export default function CampaignCard({ campaign, onDelete, onStatusChange }) {
+export default function CampaignCard({ campaign }) {
   return (
     <article className="card campaign-card">
-      <div className="card-top">
+      <div className="campaign-card-top">
         <div>
-          <h3>{campaign.campaign_name}</h3>
-          <p className="muted">{campaign.theme} • {campaign.owner_team || "Sem owner"}</p>
+          <p className="campaign-code">{campaign.campaign_id}</p>
+          <h3>{campaign.name}</h3>
         </div>
-        <CampaignStatusBadge status={campaign.status} />
+        <span className={`status-pill status-${campaign.status.toLowerCase()}`}>{campaign.status_label}</span>
       </div>
-      <div className="card-grid">
-        <div><strong>Canal</strong><span>{campaign.primary_channel || "-"}</span></div>
-        <div><strong>Prioridade</strong><span>{campaign.priority || "-"}</span></div>
-        <div><strong>Início</strong><span>{formatDate(campaign.start_date)}</span></div>
-        <div><strong>Fim</strong><span>{formatDate(campaign.end_date)}</span></div>
-        <div><strong>Regras nativas</strong><span>{campaign.native_rule_count ?? 0}</span></div>
-        <div><strong>Regras temáticas</strong><span>{campaign.thematic_rule_count ?? 0}</span></div>
+
+      <div className="campaign-grid-info">
+        <div>
+          <span>Tema</span>
+          <strong>{campaign.theme}</strong>
+        </div>
+        <div>
+          <span>Estratégia</span>
+          <strong>{campaign.strategy}</strong>
+        </div>
+        <div>
+          <span>Vigência</span>
+          <strong>{campaign.start_date} a {campaign.end_date}</strong>
+        </div>
+        <div>
+          <span>Versão</span>
+          <strong>v{campaign.version}</strong>
+        </div>
       </div>
-      <div className="card-actions">
-        <Link className="btn" to={`/campaigns/${campaign.campaign_id}/preparation`}>Abrir</Link>
-        <button className="btn btn-secondary" onClick={() => onStatusChange(campaign, "PAUSADO")}>Pausar</button>
-        <button className="btn btn-secondary" onClick={() => onStatusChange(campaign, "CANCELADO")}>Cancelar</button>
-        <button className="btn btn-danger" onClick={() => onDelete(campaign)}>Excluir</button>
+
+      <p className="muted">{campaign.objective}</p>
+
+      <div className="campaign-actions">
+        <Link className="button secondary" to={`/campaigns/${campaign.campaign_id}/preparation`}>Preparação</Link>
+        <Link className="button secondary" to={`/campaigns/${campaign.campaign_id}/segmentation`}>Segmentação</Link>
+        <Link className="button secondary" to={`/campaigns/${campaign.campaign_id}/activation`}>Ativação</Link>
       </div>
     </article>
-  );
+  )
 }
