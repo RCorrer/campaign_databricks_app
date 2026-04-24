@@ -1,13 +1,12 @@
 from pathlib import Path
-
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from backend.api.routes import router
+from backend.api.rotas import roteador_api
 
-app = FastAPI(title="Campaign Databricks App")
-app.include_router(router, prefix="/api")
+app = FastAPI(title="Orquestrador de Campanhas", version="4.0.0")
+app.include_router(roteador_api, prefix="/api")
 
 DIST_DIR = Path("frontend/dist")
 
@@ -16,21 +15,9 @@ if DIST_DIR.exists():
     if assets_dir.exists():
         app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
 
-
-@app.get("/")
-def root():
-    index = DIST_DIR / "index.html"
-    if index.exists():
-        return FileResponse(index)
-    return {"message": "Frontend não buildado ainda. Execute o build do Vite."}
-
-
-@app.get("/{full_path:path}")
-def spa_fallback(full_path: str):
-    target = DIST_DIR / full_path
-    if target.exists() and target.is_file():
-        return FileResponse(target)
-    index = DIST_DIR / "index.html"
-    if index.exists():
-        return FileResponse(index)
-    return {"message": "Frontend não buildado ainda. Execute o build do Vite."}
+    @app.get("/{caminho:path}")
+    def servir_frontend(caminho: str):
+        arquivo = DIST_DIR / caminho
+        if arquivo.is_file():
+            return FileResponse(arquivo)
+        return FileResponse(DIST_DIR / "index.html")

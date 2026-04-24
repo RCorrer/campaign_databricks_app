@@ -1,24 +1,16 @@
-import { Link } from "react-router-dom";
+import { Link } from 'react-router-dom'
 
-export default function Layout({ title, children }) {
+export default function Layout({ children }) {
   return (
     <div className="app-shell">
-      <header className="app-header">
-        <div>
-          <Link to="/" className="brand">Campaign CRM/CDP</Link>
-          <p className="brand-subtitle">Databricks App</p>
-        </div>
+      <aside className="sidebar">
+        <div className="brand">CRM/CDP</div>
+        <p className="brand-subtitle">Orquestrador de Campanhas</p>
         <nav>
-          <Link className="nav-link" to="/">Dashboard</Link>
-          <Link className="nav-link" to="/campaigns/new/preparation">Nova campanha</Link>
+          <Link to="/">Painel</Link>
         </nav>
-      </header>
-      <main className="page-shell">
-        <div className="page-title-row">
-          <h1>{title}</h1>
-        </div>
-        {children}
-      </main>
+      </aside>
+      <main className="main-content">{children}</main>
     </div>
-  );
+  )
 }
