@@ -1,9 +1,19 @@
 {
   "name": "campaign-databricks-app",
   "private": true,
-  "version": "2.1.0",
-  "type": "module",
+  "version": "2.2.0",
   "scripts": {
-    "build": "node scripts/noop-build.mjs"
+    "dev": "node ./node_modules/vite/bin/vite.js --config frontend/vite.config.js",
+    "build": "node ./node_modules/vite/bin/vite.js build --config frontend/vite.config.js",
+    "postinstall": "chmod +x node_modules/esbuild/bin/esbuild node_modules/@esbuild/linux-x64/bin/esbuild 2>/dev/null || true"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.30.1"
+  },
+  "devDependencies": {
+    "vite": "^5.4.21",
+    "@vitejs/plugin-react": "^4.7.0"
   }
 }

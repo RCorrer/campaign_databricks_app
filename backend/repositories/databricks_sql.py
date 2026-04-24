@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import time
 from typing import Any
 
@@ -8,77 +10,50 @@ from backend.core.config import settings
 
 class DatabricksSQLRepository:
     def __init__(self) -> None:
-        self.client: WorkspaceClient | None = None
+        self.client = WorkspaceClient()
         self.warehouse_id = settings.databricks_warehouse_id
 
-    def _ensure_client(self) -> WorkspaceClient:
-        if not self.warehouse_id:
-            raise RuntimeError('DATABRICKS_WAREHOUSE_ID não definido')
-        if self.client is None:
-            # Dentro do Databricks App, o WorkspaceClient resolve a autenticação
-            # automaticamente via identidade do app/usuário.
-            self.client = WorkspaceClient()
-        return self.client
+    def execute(self, statement: str, wait_timeout: str = "20s", retries: int = 1) -> list[list[Any]]:
+        last_error: Exception | None = None
+        for attempt in range(retries + 1):
+            try:
+                response = self.client.statement_execution.execute_statement(
+                    warehouse_id=self.warehouse_id,
+                    statement=statement,
+                    wait_timeout=wait_timeout,
+                )
+                return self._collect(response.statement_id)
+            except RuntimeError as exc:
+                message = str(exc)
+                if "DELTA_CONCURRENT_DELETE_READ" in message and attempt < retries:
+                    time.sleep(0.8 * (attempt + 1))
+                    last_error = exc
+                    continue
+                raise
+        if last_error:
+            raise last_error
+        return []
 
-    def execute(self, statement: str) -> list[dict[str, Any]]:
-        client = self._ensure_client()
-        response = client.statement_execution.execute_statement(
-            warehouse_id=self.warehouse_id,
-            statement=statement,
-        )
-        statement_id = response.statement_id
-
-        for _ in range(120):
-            result = client.statement_execution.get_statement(statement_id)
-            state = str(result.status.state)
-
-            if 'SUCCEEDED' in state:
-                return self._to_rows(result)
-
-            if any(token in state for token in ['FAILED', 'CANCELED', 'CLOSED']):
-                error = getattr(result.status, 'error', None)
-                message = getattr(error, 'message', None) or str(error) or 'Erro executando SQL no Databricks'
-                raise RuntimeError(message)
-
-            time.sleep(1)
-
-        raise TimeoutError('Timeout aguardando execução SQL no Databricks')
-
-    def execute_script(self, statements: list[str]) -> None:
+    def execute_script(self, statements: list[str], wait_timeout: str = "20s", retries: int = 1) -> None:
         for statement in statements:
             clean = statement.strip()
             if clean:
-                self.execute(clean)
+                self.execute(clean, wait_timeout=wait_timeout, retries=retries)
 
-    def scalar(self, statement: str, default: Any = None) -> Any:
-        rows = self.execute(statement)
-        if not rows:
-            return default
-        first = rows[0]
-        if not first:
-            return default
-        return next(iter(first.values()))
+    def _collect(self, statement_id: str) -> list[list[Any]]:
+        for _ in range(60):
+            result = self.client.statement_execution.get_statement(statement_id)
+            state = str(result.status.state)
 
-    def _to_rows(self, result) -> list[dict[str, Any]]:
-        execution_result = getattr(result, 'result', None)
-        data = getattr(execution_result, 'data_array', None) or []
+            if "SUCCEEDED" in state:
+                if result.result and result.result.data_array:
+                    return result.result.data_array
+                return []
 
-        columns: list[str] = []
-        manifest = getattr(result, 'manifest', None)
-        if manifest and getattr(manifest, 'schema', None):
-            schema = manifest.schema
-            if getattr(schema, 'columns', None):
-                columns = [getattr(col, 'name', f'col_{idx}') for idx, col in enumerate(schema.columns)]
+            if any(x in state for x in ["FAILED", "CANCELED", "CLOSED"]):
+                message = str(getattr(result.status, "error", "Erro ao executar SQL no Databricks"))
+                raise RuntimeError(message)
 
-        rows: list[dict[str, Any]] = []
-        for row in data:
-            if isinstance(row, dict):
-                rows.append(row)
-                continue
-            if not columns:
-                columns = [f'col_{idx}' for idx in range(len(row))]
-            rows.append({columns[idx]: row[idx] for idx in range(min(len(columns), len(row)))})
-        return rows
+            time.sleep(0.5)
 
-
-sql_repository = DatabricksSQLRepository()
+        raise TimeoutError("Timeout executando statement no Databricks SQL")

@@ -1,91 +1,145 @@
-from fastapi import APIRouter, HTTPException
+from __future__ import annotations
 
-from backend.core.config import settings
-from backend.models.contracts import ActivationPayload, BriefingPayload, CampaignCreate, CampaignUpdate, SegmentationPayload, StatusChangePayload
-from backend.services.campaign_service import campaign_service
-from backend.utils.mapping_loader import load_semantic_mapping
+from fastapi import APIRouter, HTTPException, Query
 
-api_router = APIRouter()
+from backend.models.contracts import (
+    ActivationRequest,
+    CampaignBriefingRequest,
+    CampaignCreateRequest,
+    CampaignUpdateRequest,
+    SegmentationSaveRequest,
+    StatusChangeRequest,
+)
+from backend.repositories.databricks_sql import DatabricksSQLRepository
+from backend.services.catalog_service import CatalogService
+from backend.services.campaign_service import CampaignService
+from backend.services.dashboard_service import DashboardService
+from backend.services.execution_service import ExecutionService
+from backend.services.query_builder import QueryBuilderService
+
+router = APIRouter()
+
+repo = DatabricksSQLRepository()
+catalog_service = CatalogService()
+query_builder = QueryBuilderService()
+dashboard_service = DashboardService(repo)
+campaign_service = CampaignService(repo, catalog_service, query_builder)
+execution_service = ExecutionService(repo)
 
 
-@api_router.get('/health')
+@router.get("/health")
 def health():
-    return {'status': 'ok', 'app': settings.app_name, 'version': settings.app_version}
+    return {"status": "ok"}
 
 
-@api_router.get('/catalog/segmentation-builder')
-def segmentation_builder_catalog():
-    return load_semantic_mapping(settings.campaign_mapping_file)
+@router.get("/catalog/full")
+def get_catalog_full():
+    return catalog_service.get_full_catalog()
 
 
-@api_router.post('/demo/bootstrap')
-def bootstrap_demo():
-    return campaign_service.seed_demo_data()
+@router.get("/catalog/initial-audiences")
+def get_initial_audiences():
+    return catalog_service.get_initial_audiences()
 
 
-@api_router.get('/campaigns')
-def list_campaigns():
-    return campaign_service.list_campaigns()
+@router.get("/catalog/themes")
+def get_themes():
+    return catalog_service.get_themes()
 
 
-@api_router.post('/campaigns')
-def create_campaign(payload: CampaignCreate):
-    return campaign_service.create_campaign(payload)
-
-
-@api_router.put('/campaigns/{campaign_id}')
-def update_campaign(campaign_id: str, payload: CampaignUpdate):
+@router.get("/dashboard/campaigns")
+def get_dashboard_campaigns(status: str | None = Query(default=None), theme: str | None = Query(default=None), search: str | None = Query(default=None)):
     try:
-        return campaign_service.update_campaign(campaign_id, payload)
-    except KeyError:
-        raise HTTPException(status_code=404, detail='Campanha não encontrada')
+        return dashboard_service.list_campaigns(status=status, theme=theme, search=search)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
-@api_router.delete('/campaigns/{campaign_id}')
+@router.post("/campaigns")
+def create_campaign(req: CampaignCreateRequest):
+    try:
+        return campaign_service.create_campaign(req)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.get("/campaigns/{campaign_id}")
+def get_campaign(campaign_id: str):
+    try:
+        return campaign_service.get_campaign_detail(campaign_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.put("/campaigns/{campaign_id}")
+def update_campaign(campaign_id: str, req: CampaignUpdateRequest):
+    try:
+        return campaign_service.update_campaign(campaign_id, req)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.delete("/campaigns/{campaign_id}")
 def delete_campaign(campaign_id: str):
     try:
         return campaign_service.delete_campaign(campaign_id)
-    except KeyError:
-        raise HTTPException(status_code=404, detail='Campanha não encontrada')
-
-
-@api_router.get('/campaigns/{campaign_id}')
-def get_campaign(campaign_id: str):
-    try:
-        return campaign_service.get_campaign(campaign_id)
-    except KeyError:
-        raise HTTPException(status_code=404, detail='Campanha não encontrada')
-
-
-@api_router.put('/campaigns/{campaign_id}/briefing')
-def save_briefing(campaign_id: str, payload: BriefingPayload):
-    try:
-        return campaign_service.save_briefing(campaign_id, payload)
-    except KeyError:
-        raise HTTPException(status_code=404, detail='Campanha não encontrada')
-
-
-@api_router.put('/campaigns/{campaign_id}/segmentation')
-def save_segmentation(campaign_id: str, payload: SegmentationPayload):
-    try:
-        return campaign_service.save_segmentation(campaign_id, payload)
-    except KeyError:
-        raise HTTPException(status_code=404, detail='Campanha não encontrada')
-
-
-@api_router.post('/campaigns/{campaign_id}/activation')
-def activate_campaign(campaign_id: str, payload: ActivationPayload):
-    try:
-        return campaign_service.activate(campaign_id, payload)
-    except KeyError:
-        raise HTTPException(status_code=404, detail='Campanha não encontrada')
-
-
-@api_router.post('/campaigns/{campaign_id}/status')
-def change_campaign_status(campaign_id: str, payload: StatusChangePayload):
-    try:
-        return campaign_service.change_status(campaign_id, payload)
-    except KeyError:
-        raise HTTPException(status_code=404, detail='Campanha não encontrada')
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.put("/campaigns/{campaign_id}/briefing")
+def save_briefing(campaign_id: str, req: CampaignBriefingRequest):
+    try:
+        return campaign_service.save_briefing(campaign_id, req)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.put("/campaigns/{campaign_id}/segmentation")
+def save_segmentation(campaign_id: str, req: SegmentationSaveRequest):
+    try:
+        return campaign_service.save_segmentation(campaign_id, req)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.post("/campaigns/{campaign_id}/segmentation/preview")
+def preview_segmentation(campaign_id: str, req: SegmentationSaveRequest):
+    try:
+        return campaign_service.preview_segmentation(req)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.post("/campaigns/{campaign_id}/activation")
+def activate_campaign(campaign_id: str, req: ActivationRequest):
+    try:
+        return execution_service.activate_campaign(campaign_id, req)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.post("/campaigns/{campaign_id}/status")
+def change_campaign_status(campaign_id: str, req: StatusChangeRequest):
+    try:
+        return campaign_service.change_status(campaign_id, req)
+    except ValueError as exc:
+        detail = str(exc)
+        status_code = 409 if "alterada ou excluída" in detail else 400
+        if detail == "Campanha não encontrada":
+            status_code = 404
+        raise HTTPException(status_code=status_code, detail=detail) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc

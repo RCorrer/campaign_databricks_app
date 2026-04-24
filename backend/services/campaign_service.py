@@ -1,420 +1,551 @@
+from __future__ import annotations
+
 import json
-from uuid import uuid4
+import uuid
+from datetime import datetime
 
-from backend.core.config import settings
 from backend.models.contracts import (
-    ActivationPayload,
-    BriefingPayload,
-    CampaignCreate,
-    CampaignSummary,
-    CampaignUpdate,
-    SegmentationPayload,
-    StatusChangePayload,
+    CampaignBriefingRequest,
+    CampaignCreateRequest,
+    CampaignUpdateRequest,
+    SegmentationSaveRequest,
+    StatusChangeRequest,
 )
-from backend.repositories.databricks_sql import sql_repository
+from backend.repositories.databricks_sql import DatabricksSQLRepository
+from backend.services.catalog_service import CatalogService
 from backend.services.query_builder import QueryBuilderService
+from backend.utils.serializers import load_json
+from backend.utils.sql_utils import parse_rows, sql_literal
 
-
-STATUS_LABELS = {
-    'PREPARACAO': 'Preparação',
-    'SEGMENTACAO': 'Segmentação',
-    'ATIVACAO': 'Ativação',
-    'ATIVO': 'Ativo',
-    'PAUSADO': 'Pausado',
-    'CONCLUIDO': 'Concluído',
-    'ENCERRADO': 'Encerrado',
-    'CANCELADO': 'Cancelado',
-}
-
-ALLOWED_TRANSITIONS = {
-    'PREPARACAO': ['CANCELADO'],
-    'SEGMENTACAO': ['PREPARACAO', 'CANCELADO'],
-    'ATIVACAO': ['SEGMENTACAO', 'CANCELADO'],
-    'ATIVO': ['PAUSADO', 'CONCLUIDO', 'ENCERRADO', 'CANCELADO'],
-    'PAUSADO': ['ATIVO', 'ENCERRADO', 'CANCELADO'],
-    'CONCLUIDO': [],
-    'ENCERRADO': [],
-    'CANCELADO': [],
+ALLOWED_STATUS_FLOW = {
+    "RASCUNHO": ["PREPARACAO", "CANCELADO"],
+    "PREPARACAO": ["SEGMENTACAO", "CANCELADO"],
+    "SEGMENTACAO": ["ATIVACAO", "PREPARACAO", "CANCELADO"],
+    "ATIVACAO": ["ATIVO", "SEGMENTACAO", "CANCELADO"],
+    "ATIVO": ["PAUSADO", "CONCLUIDO", "ENCERRADO", "CANCELADO"],
+    "PAUSADO": ["ATIVO", "ENCERRADO", "CANCELADO"],
 }
 
 
 class CampaignService:
-    def __init__(self):
-        self.query_builder = QueryBuilderService()
+    DETAIL_COLUMNS = [
+        "campaign_id",
+        "campaign_name",
+        "theme",
+        "objective",
+        "strategy",
+        "description",
+        "primary_channel",
+        "priority",
+        "owner_team",
+        "goal_kpi",
+        "goal_value",
+        "status",
+        "status_reason",
+        "periodicity",
+        "start_date",
+        "end_date",
+        "max_impacts_month",
+        "control_group_enabled",
+        "last_run_at",
+        "challenge",
+        "target_business_outcome",
+        "channels_json",
+        "constraints",
+        "business_rules",
+        "notes",
+        "segmentation_version_no",
+        "initial_audience_code",
+        "initial_audience_view",
+        "native_rules_json",
+        "include_rules_json",
+        "exclude_rules_json",
+        "native_rule_count",
+        "thematic_rule_count",
+        "generated_sql",
+        "estimated_count",
+        "activation_version_no",
+        "execution_target_name",
+        "activation_mode",
+        "activation_start_date",
+        "activation_end_date",
+        "activated_at",
+        "deactivated_at",
+        "updated_at",
+        "created_at",
+    ]
 
-    def seed_demo_data(self) -> list[dict]:
-        return self.list_campaigns()
+    def __init__(
+        self,
+        repo: DatabricksSQLRepository,
+        catalog_service: CatalogService,
+        query_builder: QueryBuilderService,
+    ) -> None:
+        self.repo = repo
+        self.catalog_service = catalog_service
+        self.query_builder = query_builder
 
-    def list_campaigns(self) -> list[dict]:
-        rows = sql_repository.execute(f"""
-            SELECT
-              campaign_id,
-              campaign_name,
-              theme,
-              objective,
-              description,
-              status,
-              CAST(start_date AS STRING) AS start_date,
-              CAST(end_date AS STRING) AS end_date,
-              current_version
-            FROM {settings.metadata_namespace}.campaign_header
-            ORDER BY updated_at DESC, created_at DESC
-        """)
-        return [
-            {
-                'campaign_id': row['campaign_id'],
-                'name': row['campaign_name'],
-                'theme': row.get('theme'),
-                'objective': row.get('objective'),
-                'description': row.get('description'),
-                'status': row.get('status'),
-                'status_label': STATUS_LABELS.get(row.get('status'), row.get('status')),
-                'start_date': row.get('start_date'),
-                'end_date': row.get('end_date'),
-                'version': int(row.get('current_version') or 1),
-                'allowed_transitions': self._allowed_transitions(row.get('status')),
-            }
-            for row in rows
-        ]
+    def create_campaign(self, req: CampaignCreateRequest) -> dict:
+        campaign_id = f"CMP-{uuid.uuid4().hex[:10].upper()}"
+        now = datetime.utcnow().isoformat()
 
-    def create_campaign(self, payload: CampaignCreate) -> CampaignSummary:
-        campaign_id = f"CMP-{uuid4().hex[:10].upper()}"
-        sql_repository.execute_script([
+        self.repo.execute(
             f"""
-            INSERT INTO {settings.metadata_namespace}.campaign_header (
-              campaign_id, campaign_name, theme, objective, strategy, description, status,
-              periodicity, start_date, end_date, max_impacts_month, control_group_enabled,
-              current_version, created_at, updated_at, created_by, updated_by
-            ) VALUES (
-              {q(campaign_id)}, {q(payload.name)}, {q(payload.theme)}, {q(payload.objective)}, {q(payload.strategy)}, {q(payload.description)}, 'PREPARACAO',
-              {q(payload.periodicity)}, {date_or_null(payload.start_date)}, {date_or_null(payload.end_date)}, {payload.max_impacts_month}, {bool_sql(payload.control_group_enabled)},
-              1, current_timestamp(), current_timestamp(), current_user(), current_user()
+            INSERT INTO main.campaign_app.campaign_header (
+                campaign_id,
+                campaign_name,
+                theme,
+                objective,
+                strategy,
+                description,
+                primary_channel,
+                priority,
+                owner_team,
+                goal_kpi,
+                goal_value,
+                status,
+                status_reason,
+                periodicity,
+                start_date,
+                end_date,
+                max_impacts_month,
+                control_group_enabled,
+                last_run_at,
+                created_at,
+                updated_at,
+                created_by,
+                updated_by
             )
-            """,
-            self._status_history_sql(campaign_id, None, 'PREPARACAO', 'Criação da campanha'),
-            self._audit_sql(campaign_id, 'CAMPAIGN_CREATED', payload.model_dump()),
-        ])
-        return CampaignSummary(
-            campaign_id=campaign_id,
-            name=payload.name,
-            status='PREPARACAO',
-            start_date=payload.start_date,
-            end_date=payload.end_date,
-            version=1,
+            VALUES (
+                {sql_literal(campaign_id)},
+                {sql_literal(req.name)},
+                {sql_literal(req.theme)},
+                {sql_literal(req.objective)},
+                {sql_literal(req.strategy)},
+                {sql_literal(req.description)},
+                {sql_literal(req.primary_channel)},
+                {sql_literal(req.priority)},
+                {sql_literal(req.owner_team)},
+                {sql_literal(req.goal_kpi)},
+                {sql_literal(req.goal_value)},
+                'PREPARACAO',
+                NULL,
+                {sql_literal(req.periodicity)},
+                DATE({sql_literal(req.start_date)}),
+                DATE({sql_literal(req.end_date)}),
+                {req.max_impacts_month},
+                {str(req.control_group_enabled).upper()},
+                NULL,
+                current_timestamp(),
+                current_timestamp(),
+                'app',
+                'app'
+            )
+            """
         )
 
-    def update_campaign(self, campaign_id: str, payload: CampaignUpdate) -> dict:
-        self._ensure_campaign_exists(campaign_id)
-        sql_repository.execute_script([
+        self.repo.execute(
             f"""
-            UPDATE {settings.metadata_namespace}.campaign_header
-            SET campaign_name = {q(payload.name)},
-                theme = {q(payload.theme)},
-                objective = {q(payload.objective)},
-                strategy = {q(payload.strategy)},
-                description = {q(payload.description)},
-                periodicity = {q(payload.periodicity)},
-                start_date = {date_or_null(payload.start_date)},
-                end_date = {date_or_null(payload.end_date)},
-                max_impacts_month = {payload.max_impacts_month},
-                control_group_enabled = {bool_sql(payload.control_group_enabled)},
-                updated_at = current_timestamp(),
-                updated_by = current_user()
-            WHERE campaign_id = {q(campaign_id)}
-            """,
-            self._audit_sql(campaign_id, 'CAMPAIGN_UPDATED', payload.model_dump()),
-        ])
-        return self.get_campaign(campaign_id)
+            INSERT INTO main.campaign_app.campaign_status_history (
+                campaign_id,
+                from_status,
+                to_status,
+                reason,
+                changed_at,
+                changed_by
+            )
+            VALUES (
+                {sql_literal(campaign_id)},
+                NULL,
+                'PREPARACAO',
+                'Criação da campanha',
+                current_timestamp(),
+                'app'
+            )
+            """
+        )
+
+        self._insert_audit_event(
+            campaign_id=campaign_id,
+            event_type="CREATE_CAMPAIGN",
+            payload=req.model_dump(),
+        )
+
+        return {
+            "campaign_id": campaign_id,
+            "created_at": now,
+        }
+
+    def update_campaign(self, campaign_id: str, req: CampaignUpdateRequest) -> dict:
+        self._ensure_exists(campaign_id)
+
+        self.repo.execute(
+            f"""
+            UPDATE main.campaign_app.campaign_header
+               SET campaign_name = {sql_literal(req.name)},
+                   theme = {sql_literal(req.theme)},
+                   objective = {sql_literal(req.objective)},
+                   strategy = {sql_literal(req.strategy)},
+                   description = {sql_literal(req.description)},
+                   primary_channel = {sql_literal(req.primary_channel)},
+                   priority = {sql_literal(req.priority)},
+                   owner_team = {sql_literal(req.owner_team)},
+                   goal_kpi = {sql_literal(req.goal_kpi)},
+                   goal_value = {sql_literal(req.goal_value)},
+                   status_reason = {sql_literal(req.status_reason)},
+                   periodicity = {sql_literal(req.periodicity)},
+                   start_date = DATE({sql_literal(req.start_date)}),
+                   end_date = DATE({sql_literal(req.end_date)}),
+                   max_impacts_month = {req.max_impacts_month},
+                   control_group_enabled = {str(req.control_group_enabled).upper()},
+                   updated_at = current_timestamp(),
+                   updated_by = 'app'
+             WHERE campaign_id = {sql_literal(campaign_id)}
+            """
+        )
+
+        self._insert_audit_event(
+            campaign_id=campaign_id,
+            event_type="UPDATE_CAMPAIGN",
+            payload=req.model_dump(),
+        )
+
+        return {"campaign_id": campaign_id, "updated": True}
+
+    def save_briefing(self, campaign_id: str, req: CampaignBriefingRequest) -> dict:
+        self._ensure_exists(campaign_id)
+
+        next_version = self._get_next_version(
+            table_name="main.campaign_app.campaign_briefing_version",
+            campaign_id=campaign_id,
+        )
+
+        self.repo.execute(
+            f"""
+            UPDATE main.campaign_app.campaign_briefing_version
+               SET is_current = FALSE
+             WHERE campaign_id = {sql_literal(campaign_id)}
+               AND is_current = TRUE
+            """
+        )
+
+        self.repo.execute(
+            f"""
+            INSERT INTO main.campaign_app.campaign_briefing_version (
+                campaign_id,
+                version_no,
+                challenge,
+                target_business_outcome,
+                channels_json,
+                constraints,
+                business_rules,
+                notes,
+                is_current,
+                created_at,
+                created_by
+            )
+            VALUES (
+                {sql_literal(campaign_id)},
+                {next_version},
+                {sql_literal(req.challenge)},
+                {sql_literal(req.target_business_outcome)},
+                {sql_literal(json.dumps(req.channels))},
+                {sql_literal(req.constraints)},
+                {sql_literal(req.business_rules)},
+                {sql_literal(req.notes)},
+                TRUE,
+                current_timestamp(),
+                'app'
+            )
+            """
+        )
+
+        self.repo.execute(
+            f"""
+            UPDATE main.campaign_app.campaign_header
+               SET updated_at = current_timestamp(),
+                   updated_by = 'app'
+             WHERE campaign_id = {sql_literal(campaign_id)}
+            """
+        )
+
+        self._insert_audit_event(
+            campaign_id=campaign_id,
+            event_type="SAVE_BRIEFING",
+            payload={
+                "version_no": next_version,
+                **req.model_dump(),
+            },
+        )
+
+        return {
+            "campaign_id": campaign_id,
+            "version_no": next_version,
+            "saved": True,
+        }
+
+    def save_segmentation(self, campaign_id: str, req: SegmentationSaveRequest) -> dict:
+        self._ensure_exists(campaign_id)
+
+        initial_audience_code = req.initial_audience_code.strip().lower()
+
+        mapping = self.catalog_service.get_full_catalog()
+        sql_preview = self.query_builder.build_segmentation_sql(
+            req.initial_audience_view,
+            [r.model_dump() for r in req.native_rules],
+            [r.model_dump() for r in req.include_rules],
+            [r.model_dump() for r in req.exclude_rules],
+            mapping,
+        )
+
+        count_sql = f"SELECT COUNT(*) FROM ({sql_preview}) q"
+        count_rows = self.repo.execute(count_sql)
+        estimated_count = int(count_rows[0][0]) if count_rows else 0
+
+        next_version = self._get_next_version(
+            table_name="main.campaign_app.campaign_segmentation_version",
+            campaign_id=campaign_id,
+        )
+
+        self.repo.execute(
+            f"""
+            UPDATE main.campaign_app.campaign_segmentation_version
+               SET is_current = FALSE
+             WHERE campaign_id = {sql_literal(campaign_id)}
+               AND is_current = TRUE
+            """
+        )
+
+        self.repo.execute(
+            f"""
+            INSERT INTO main.campaign_app.campaign_segmentation_version (
+                campaign_id,
+                version_no,
+                initial_audience_code,
+                initial_audience_view,
+                native_rules_json,
+                include_rules_json,
+                exclude_rules_json,
+                native_rule_count,
+                thematic_rule_count,
+                generated_sql,
+                estimated_count,
+                is_current,
+                created_at,
+                created_by
+            )
+            VALUES (
+                {sql_literal(campaign_id)},
+                {next_version},
+                {sql_literal(initial_audience_code)},
+                {sql_literal(req.initial_audience_view)},
+                {sql_literal(json.dumps([r.model_dump() for r in req.native_rules]))},
+                {sql_literal(json.dumps([r.model_dump() for r in req.include_rules]))},
+                {sql_literal(json.dumps([r.model_dump() for r in req.exclude_rules]))},
+                {len(req.native_rules)},
+                {len(req.include_rules) + len(req.exclude_rules)},
+                {sql_literal(sql_preview)},
+                {estimated_count},
+                TRUE,
+                current_timestamp(),
+                'app'
+            )
+            """
+        )
+
+        self.repo.execute(
+            f"""
+            UPDATE main.campaign_app.campaign_header
+               SET updated_at = current_timestamp(),
+                   updated_by = 'app'
+             WHERE campaign_id = {sql_literal(campaign_id)}
+            """
+        )
+
+        self._insert_audit_event(
+            campaign_id=campaign_id,
+            event_type="SAVE_SEGMENTATION",
+            payload={
+                "version_no": next_version,
+                "initial_audience_code": initial_audience_code,
+                "initial_audience_view": req.initial_audience_view,
+                "native_rule_count": len(req.native_rules),
+                "thematic_rule_count": len(req.include_rules) + len(req.exclude_rules),
+                "estimated_count": estimated_count,
+            },
+        )
+
+        return {
+            "campaign_id": campaign_id,
+            "version_no": next_version,
+            "estimated_count": estimated_count,
+            "sql_preview": sql_preview,
+        }
+
+    def preview_segmentation(self, req: SegmentationSaveRequest) -> dict:
+        mapping = self.catalog_service.get_full_catalog()
+        sql_preview = self.query_builder.build_segmentation_sql(
+            req.initial_audience_view,
+            [r.model_dump() for r in req.native_rules],
+            [r.model_dump() for r in req.include_rules],
+            [r.model_dump() for r in req.exclude_rules],
+            mapping,
+        )
+
+        count_sql = f"SELECT COUNT(*) FROM ({sql_preview}) q"
+        count_rows = self.repo.execute(count_sql)
+        estimated_count = int(count_rows[0][0]) if count_rows else 0
+
+        return {
+            "estimated_count": estimated_count,
+            "sql_preview": sql_preview,
+        }
+
+    def get_campaign_detail(self, campaign_id: str) -> dict:
+        rows = self.repo.execute(
+            f"""
+            SELECT {", ".join(self.DETAIL_COLUMNS)}
+              FROM main.campaign_app.vw_campaign_current_definition
+             WHERE campaign_id = {sql_literal(campaign_id)}
+            """
+        )
+
+        if not rows:
+            raise ValueError("Campanha não encontrada")
+
+        item = parse_rows(rows, self.DETAIL_COLUMNS)[0]
+        item["channels"] = load_json(item.pop("channels_json"), [])
+        item["native_rules"] = load_json(item.pop("native_rules_json"), [])
+        item["include_rules"] = load_json(item.pop("include_rules_json"), [])
+        item["exclude_rules"] = load_json(item.pop("exclude_rules_json"), [])
+
+        return item
+
+    def change_status(self, campaign_id: str, req: StatusChangeRequest) -> dict:
+        self._ensure_exists(campaign_id)
+
+        current_status = self._get_current_status(campaign_id)
+        allowed = ALLOWED_STATUS_FLOW.get(current_status, [])
+
+        if req.new_status not in allowed:
+            raise ValueError(f"Transição inválida: {current_status} -> {req.new_status}")
+
+        self.repo.execute(
+            f"""
+            UPDATE main.campaign_app.campaign_header
+               SET status = {sql_literal(req.new_status)},
+                   status_reason = {sql_literal(req.reason)},
+                   updated_at = current_timestamp(),
+                   updated_by = 'app'
+             WHERE campaign_id = {sql_literal(campaign_id)}
+            """
+        )
+
+        self.repo.execute(
+            f"""
+            INSERT INTO main.campaign_app.campaign_status_history (
+                campaign_id,
+                from_status,
+                to_status,
+                reason,
+                changed_at,
+                changed_by
+            )
+            VALUES (
+                {sql_literal(campaign_id)},
+                {sql_literal(current_status)},
+                {sql_literal(req.new_status)},
+                {sql_literal(req.reason)},
+                current_timestamp(),
+                'app'
+            )
+            """
+        )
+
+        self._insert_audit_event(
+            campaign_id=campaign_id,
+            event_type="CHANGE_STATUS",
+            payload={
+                "from_status": current_status,
+                "to_status": req.new_status,
+                "reason": req.reason,
+            },
+        )
+
+        return {
+            "campaign_id": campaign_id,
+            "from_status": current_status,
+            "to_status": req.new_status,
+            "changed": True,
+        }
 
     def delete_campaign(self, campaign_id: str) -> dict:
-        self._ensure_campaign_exists(campaign_id)
-        activation_objects = sql_repository.execute(f"""
-            SELECT activation_object_name
-            FROM {settings.metadata_namespace}.campaign_activation_version
-            WHERE campaign_id = {q(campaign_id)}
-              AND activation_object_name IS NOT NULL
-        """)
-        scripts = []
-        for row in activation_objects:
-            obj = row.get('activation_object_name')
-            if obj:
-                scripts.append(f"DROP TABLE IF EXISTS {obj}")
-                scripts.append(f"DROP VIEW IF EXISTS {obj}")
-        scripts += [
-            f"DELETE FROM {settings.execution_namespace}.campaign_audience WHERE campaign_id = {q(campaign_id)}",
-            f"DELETE FROM {settings.execution_namespace}.campaign_run_log WHERE campaign_id = {q(campaign_id)}",
-            f"DELETE FROM {settings.metadata_namespace}.campaign_activation_version WHERE campaign_id = {q(campaign_id)}",
-            f"DELETE FROM {settings.metadata_namespace}.campaign_segmentation_version WHERE campaign_id = {q(campaign_id)}",
-            f"DELETE FROM {settings.metadata_namespace}.campaign_briefing_version WHERE campaign_id = {q(campaign_id)}",
-            f"DELETE FROM {settings.metadata_namespace}.campaign_status_history WHERE campaign_id = {q(campaign_id)}",
-            f"DELETE FROM {settings.metadata_namespace}.campaign_audit_event WHERE campaign_id = {q(campaign_id)}",
-            f"DELETE FROM {settings.metadata_namespace}.campaign_header WHERE campaign_id = {q(campaign_id)}",
-        ]
-        sql_repository.execute_script(scripts)
-        return {'deleted': True, 'campaign_id': campaign_id}
+        self._ensure_exists(campaign_id)
 
-    def get_campaign(self, campaign_id: str) -> dict:
-        rows = sql_repository.execute(f"""
-            SELECT *
-            FROM {settings.metadata_namespace}.vw_campaign_current_definition
-            WHERE campaign_id = {q(campaign_id)}
-        """)
+        self.repo.execute_script(
+            [
+                f"DELETE FROM main.campaign_execution.campaign_audience WHERE campaign_id = {sql_literal(campaign_id)}",
+                f"DELETE FROM main.campaign_execution.campaign_run_log WHERE campaign_id = {sql_literal(campaign_id)}",
+                f"DELETE FROM main.campaign_app.campaign_activation_version WHERE campaign_id = {sql_literal(campaign_id)}",
+                f"DELETE FROM main.campaign_app.campaign_segmentation_version WHERE campaign_id = {sql_literal(campaign_id)}",
+                f"DELETE FROM main.campaign_app.campaign_briefing_version WHERE campaign_id = {sql_literal(campaign_id)}",
+                f"DELETE FROM main.campaign_app.campaign_status_history WHERE campaign_id = {sql_literal(campaign_id)}",
+                f"DELETE FROM main.campaign_app.campaign_audit_event WHERE campaign_id = {sql_literal(campaign_id)}",
+                f"DELETE FROM main.campaign_app.campaign_header WHERE campaign_id = {sql_literal(campaign_id)}",
+            ]
+        )
+
+        return {"campaign_id": campaign_id, "deleted": True}
+
+    def _ensure_exists(self, campaign_id: str) -> None:
+        rows = self.repo.execute(
+            f"""
+            SELECT 1
+              FROM main.campaign_app.campaign_header
+             WHERE campaign_id = {sql_literal(campaign_id)}
+            """
+        )
         if not rows:
-            raise KeyError(campaign_id)
-        row = rows[0]
-        header = sql_repository.execute(f"""
-            SELECT description, strategy
-            FROM {settings.metadata_namespace}.campaign_header
-            WHERE campaign_id = {q(campaign_id)}
-            LIMIT 1
-        """)[0]
-        status = row.get('status')
-        result = {
-            'campaign_id': row['campaign_id'],
-            'name': row.get('campaign_name'),
-            'theme': row.get('theme'),
-            'objective': row.get('objective'),
-            'strategy': row.get('strategy'),
-            'description': header.get('description'),
-            'status': status,
-            'status_label': STATUS_LABELS.get(status, status),
-            'allowed_transitions': self._allowed_transitions(status),
-            'start_date': row.get('start_date'),
-            'end_date': row.get('end_date'),
-            'version': int(row.get('current_version') or 1),
-            'campaign': {
-                'strategy': row.get('strategy'),
-                'description': header.get('description'),
-            },
-            'briefing': {
-                'challenge': row.get('challenge'),
-                'target_business_outcome': row.get('target_business_outcome'),
-                'channels': parse_array(row.get('channels')),
-                'constraints': parse_array(row.get('constraints')),
-                'business_rules': parse_array(row.get('business_rules')),
-                'notes': row.get('notes'),
-            },
-            'segmentation': {
-                'initial_audience_code': row.get('initial_audience_code'),
-                'universe_view': row.get('universe_view'),
-                'native_include_groups': parse_json(row.get('native_include_rules_json')) or [],
-                'native_exclude_groups': parse_json(row.get('native_exclude_rules_json')) or [],
-                'include_groups': parse_json(row.get('include_rules_json')) or [],
-                'exclude_groups': parse_json(row.get('exclude_rules_json')) or [],
-                'preview_sql': row.get('preview_sql'),
-                'estimated_audience': row.get('estimated_audience'),
-            },
-            'activation': {
-                'materialization_mode': row.get('materialization_mode'),
-                'activation_object_name': row.get('activation_object_name'),
-                'activation_sql': row.get('activation_sql'),
-                'effective_start_date': row.get('effective_start_date'),
-                'effective_end_date': row.get('effective_end_date'),
-                'activation_status': row.get('activation_status'),
-            },
-        }
-        return result
+            raise ValueError("Campanha não encontrada")
 
-    def save_briefing(self, campaign_id: str, payload: BriefingPayload) -> dict:
-        version = self._current_version(campaign_id)
-        self._ensure_campaign_exists(campaign_id)
-        sql_repository.execute_script([
-            f"DELETE FROM {settings.metadata_namespace}.campaign_briefing_version WHERE campaign_id = {q(campaign_id)} AND version_id = {version}",
+    def _get_current_status(self, campaign_id: str) -> str:
+        rows = self.repo.execute(
             f"""
-            INSERT INTO {settings.metadata_namespace}.campaign_briefing_version (
-              campaign_id, version_id, challenge, target_business_outcome, channels,
-              constraints, business_rules, notes, created_at, created_by
-            ) VALUES (
-              {q(campaign_id)}, {version}, {q(payload.challenge)}, {q(payload.target_business_outcome)}, {array_sql(payload.channels)},
-              {array_sql(payload.constraints)}, {array_sql(payload.business_rules)}, {q(payload.notes)}, current_timestamp(), current_user()
-            )
-            """,
-            f"UPDATE {settings.metadata_namespace}.campaign_header SET updated_at = current_timestamp(), updated_by = current_user() WHERE campaign_id = {q(campaign_id)}",
-            self._audit_sql(campaign_id, 'BRIEFING_SAVED', payload.model_dump()),
-        ])
-        return self.get_campaign(campaign_id)
+            SELECT status
+              FROM main.campaign_app.campaign_header
+             WHERE campaign_id = {sql_literal(campaign_id)}
+            """
+        )
+        if not rows:
+            raise ValueError("Campanha não encontrada")
+        return str(rows[0][0])
 
-    def save_segmentation(self, campaign_id: str, payload: SegmentationPayload) -> dict:
-        version = self._current_version(campaign_id)
-        self._ensure_campaign_exists(campaign_id)
-        preview_sql = self.query_builder.build_preview_sql(payload)
-        estimated_audience = sql_repository.scalar(f"SELECT COUNT(*) AS total FROM ({preview_sql}) q", 0)
-        sql_repository.execute_script([
-            f"DELETE FROM {settings.metadata_namespace}.campaign_segmentation_version WHERE campaign_id = {q(campaign_id)} AND version_id = {version}",
+    def _get_next_version(self, table_name: str, campaign_id: str) -> int:
+        rows = self.repo.execute(
             f"""
-            INSERT INTO {settings.metadata_namespace}.campaign_segmentation_version (
-              campaign_id, version_id, initial_audience_code, universe_view,
-              native_include_rules_json, native_exclude_rules_json, include_rules_json, exclude_rules_json,
-              preview_sql, estimated_audience, created_at, created_by
-            ) VALUES (
-              {q(campaign_id)}, {version}, {q(payload.initial_audience_code)}, {q(payload.universe_view)},
-              {q(json.dumps([g.model_dump() for g in payload.native_include_groups]))},
-              {q(json.dumps([g.model_dump() for g in payload.native_exclude_groups]))},
-              {q(json.dumps([g.model_dump() for g in payload.include_groups]))},
-              {q(json.dumps([g.model_dump() for g in payload.exclude_groups]))},
-              {q(preview_sql)}, {int(estimated_audience or 0)}, current_timestamp(), current_user()
-            )
-            """,
-            f"UPDATE {settings.metadata_namespace}.campaign_header SET status = 'SEGMENTACAO', updated_at = current_timestamp(), updated_by = current_user() WHERE campaign_id = {q(campaign_id)}",
-            self._status_history_sql(campaign_id, 'PREPARACAO', 'SEGMENTACAO', payload.save_as_version_note or 'Segmentação salva'),
-            self._audit_sql(campaign_id, 'SEGMENTATION_SAVED', payload.model_dump()),
-        ])
-        return self.get_campaign(campaign_id)
+            SELECT COALESCE(MAX(version_no), 0) + 1
+              FROM {table_name}
+             WHERE campaign_id = {sql_literal(campaign_id)}
+            """
+        )
+        return int(rows[0][0]) if rows else 1
 
-    def activate(self, campaign_id: str, payload: ActivationPayload) -> dict:
-        version = self._current_version(campaign_id)
-        self._ensure_campaign_exists(campaign_id)
-        segmentation_rows = sql_repository.execute(f"""
-            SELECT universe_view, preview_sql, initial_audience_code
-            FROM {settings.metadata_namespace}.campaign_segmentation_version
-            WHERE campaign_id = {q(campaign_id)} AND version_id = {version}
-            LIMIT 1
-        """)
-        if not segmentation_rows:
-            raise RuntimeError('Salve a segmentação antes de ativar a campanha')
-        segmentation = segmentation_rows[0]
-        object_name = f"{settings.execution_namespace}.audience_{campaign_id.lower().replace('-', '_')}_v{version}"
-        audience_select = f"""
-            SELECT
-              {q(campaign_id)} AS campaign_id,
-              {version} AS segmentation_version,
-              cpf_cnpj,
-              current_timestamp() AS dt_segmentacao,
-              {date_or_null(payload.effective_start_date)} AS dt_inicio_vigencia,
-              {date_or_null(payload.effective_end_date)} AS dt_fim_vigencia,
-              'ATIVA' AS status_audiencia,
-              {q(segmentation.get('initial_audience_code'))} AS origem_publico,
-              {q(payload.materialization_mode)} AS materialization_mode,
-              {q(payload.execution_mode)} AS execution_mode
-            FROM ({segmentation['preview_sql']}) src
-        """
-        object_ddl = f"CREATE OR REPLACE {payload.materialization_mode} {object_name} AS {audience_select}" if payload.materialization_mode != 'TABLE' else f"CREATE OR REPLACE TABLE {object_name} AS {audience_select}"
-        sql_repository.execute_script([
-            object_ddl,
-            f"DELETE FROM {settings.execution_namespace}.campaign_audience WHERE campaign_id = {q(campaign_id)} AND segmentation_version = {version}",
-            f"INSERT INTO {settings.execution_namespace}.campaign_audience {audience_select}",
-            f"DELETE FROM {settings.execution_namespace}.campaign_run_log WHERE campaign_id = {q(campaign_id)} AND segmentation_version = {version}",
+    def _insert_audit_event(self, campaign_id: str, event_type: str, payload: dict) -> None:
+        self.repo.execute(
             f"""
-            INSERT INTO {settings.execution_namespace}.campaign_run_log (
-              campaign_id, segmentation_version, run_ts, execution_mode, materialization_mode,
-              output_object, total_records, snapshot_object, run_status, error_message
+            INSERT INTO main.campaign_app.campaign_audit_event (
+                campaign_id,
+                event_type,
+                payload_json,
+                created_at,
+                created_by
             )
-            SELECT
-              {q(campaign_id)}, {version}, current_timestamp(), {q(payload.execution_mode)}, {q(payload.materialization_mode)},
-              {q(object_name)}, COUNT(*), NULL, 'SUCCEEDED', NULL
-            FROM {object_name}
-            """,
-            f"DELETE FROM {settings.metadata_namespace}.campaign_activation_version WHERE campaign_id = {q(campaign_id)} AND version_id = {version}",
-            f"""
-            INSERT INTO {settings.metadata_namespace}.campaign_activation_version (
-              campaign_id, version_id, materialization_mode, activation_object_name, activation_sql,
-              effective_start_date, effective_end_date, activation_status, activated_at, activated_by
-            ) VALUES (
-              {q(campaign_id)}, {version}, {q(payload.materialization_mode)}, {q(object_name)}, {q(object_ddl)},
-              {date_or_null(payload.effective_start_date)}, {date_or_null(payload.effective_end_date)}, 'ATIVO', current_timestamp(), current_user()
+            VALUES (
+                {sql_literal(campaign_id)},
+                {sql_literal(event_type)},
+                {sql_literal(json.dumps(payload))},
+                current_timestamp(),
+                'app'
             )
-            """,
-            f"UPDATE {settings.metadata_namespace}.campaign_header SET status = 'ATIVO', updated_at = current_timestamp(), updated_by = current_user() WHERE campaign_id = {q(campaign_id)}",
-            self._status_history_sql(campaign_id, 'SEGMENTACAO', 'ATIVO', 'Campanha ativada'),
-            self._audit_sql(campaign_id, 'CAMPAIGN_ACTIVATED', payload.model_dump() | {'output_object': object_name}),
-        ])
-        return self.get_campaign(campaign_id)
-
-    def change_status(self, campaign_id: str, payload: StatusChangePayload) -> dict:
-        self._ensure_campaign_exists(campaign_id)
-        current_status = sql_repository.scalar(
-            f"SELECT status FROM {settings.metadata_namespace}.campaign_header WHERE campaign_id = {q(campaign_id)}",
-            'PREPARACAO',
+            """
         )
-        allowed = self._allowed_transitions(current_status)
-        if payload.new_status not in allowed:
-            raise ValueError(f'Transição inválida: {current_status} -> {payload.new_status}')
-        sql_repository.execute_script([
-            f"UPDATE {settings.metadata_namespace}.campaign_header SET status = {q(payload.new_status)}, updated_at = current_timestamp(), updated_by = current_user() WHERE campaign_id = {q(campaign_id)}",
-            self._status_history_sql(campaign_id, current_status, payload.new_status, payload.reason),
-            self._audit_sql(campaign_id, 'STATUS_CHANGED', payload.model_dump()),
-        ])
-        return self.get_campaign(campaign_id)
-
-    def _ensure_campaign_exists(self, campaign_id: str) -> None:
-        exists = sql_repository.scalar(
-            f"SELECT COUNT(*) FROM {settings.metadata_namespace}.campaign_header WHERE campaign_id = {q(campaign_id)}",
-            0,
-        )
-        if int(exists or 0) == 0:
-            raise KeyError(campaign_id)
-
-    def _current_version(self, campaign_id: str) -> int:
-        version = sql_repository.scalar(
-            f"SELECT current_version FROM {settings.metadata_namespace}.campaign_header WHERE campaign_id = {q(campaign_id)}",
-            1,
-        )
-        return int(version or 1)
-
-    def _status_history_sql(self, campaign_id: str, from_status: str | None, to_status: str, reason: str | None) -> str:
-        return f"""
-        INSERT INTO {settings.metadata_namespace}.campaign_status_history (
-          campaign_id, from_status, to_status, change_reason, changed_at, changed_by
-        ) VALUES (
-          {q(campaign_id)}, {q(from_status)}, {q(to_status)}, {q(reason)}, current_timestamp(), current_user()
-        )
-        """
-
-    def _audit_sql(self, campaign_id: str, event_name: str, payload: dict) -> str:
-        return f"""
-        INSERT INTO {settings.metadata_namespace}.campaign_audit_event (
-          campaign_id, event_name, payload_json, event_ts, event_user
-        ) VALUES (
-          {q(campaign_id)}, {q(event_name)}, {q(json.dumps(payload, ensure_ascii=False))}, current_timestamp(), current_user()
-        )
-        """
-
-    def _allowed_transitions(self, status: str | None) -> list[str]:
-        return ALLOWED_TRANSITIONS.get(status or 'PREPARACAO', [])
-
-
-campaign_service = CampaignService()
-
-
-def q(value) -> str:
-    if value is None:
-        return 'NULL'
-    return "'" + str(value).replace("'", "''") + "'"
-
-
-def bool_sql(value: bool) -> str:
-    return 'true' if value else 'false'
-
-
-def date_or_null(value: str | None) -> str:
-    if not value:
-        return 'NULL'
-    return f"DATE {q(value)}"
-
-
-def array_sql(values: list[str]) -> str:
-    if not values:
-        return 'array()'
-    return 'array(' + ', '.join(q(v) for v in values) + ')'
-
-
-def parse_json(value):
-    if value in (None, ''):
-        return None
-    if isinstance(value, (list, dict)):
-        return value
-    return json.loads(value)
-
-
-def parse_array(value):
-    if value in (None, ''):
-        return []
-    if isinstance(value, list):
-        return value
-    text = str(value).strip()
-    if text.startswith('['):
-        try:
-            return json.loads(text)
-        except Exception:
-            return []
-    return [item.strip() for item in text.strip('{}').split(',') if item.strip()]
