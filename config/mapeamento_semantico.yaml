@@ -1,0 +1,75 @@
+publicos_iniciais:
+  - codigo: base_clientes
+    nome: Base de clientes
+    view: main.fontes_campanha.vw_publico_base_clientes
+  - codigo: prime
+    nome: Clientes Prime
+    view: main.fontes_campanha.vw_publico_prime
+  - codigo: exclusive
+    nome: Clientes Exclusive
+    view: main.fontes_campanha.vw_publico_exclusive
+  - codigo: pj
+    nome: Pessoa jurídica
+    view: main.fontes_campanha.vw_publico_pj
+  - codigo: varejo
+    nome: Varejo
+    view: main.fontes_campanha.vw_publico_varejo
+  - codigo: jovem_digital
+    nome: Jovem digital
+    view: main.fontes_campanha.vw_publico_jovem_digital
+
+campos_nativos:
+  - campo: idade
+    rotulo: Idade
+    tipo: numero
+  - campo: cidade
+    rotulo: Cidade
+    tipo: texto
+  - campo: uf
+    rotulo: UF
+    tipo: texto
+  - campo: renda_mensal
+    rotulo: Renda mensal
+    tipo: numero
+  - campo: segmento
+    rotulo: Segmento
+    tipo: texto
+
+temas:
+  - chave: contas
+    nome: Contas
+    tabela: main.cliente_360.contas
+    campos:
+      - campo: tipo_conta
+        rotulo: Tipo de conta
+        tipo: texto
+      - campo: ativa
+        rotulo: Conta ativa
+        tipo: booleano
+  - chave: saldos
+    nome: Saldos
+    tabela: main.cliente_360.saldos
+    campos:
+      - campo: saldo_total
+        rotulo: Saldo total
+        tipo: numero
+  - chave: cartoes
+    nome: Cartões
+    tabela: main.cliente_360.cartoes
+    campos:
+      - campo: possui_cartao
+        rotulo: Possui cartão
+        tipo: booleano
+      - campo: limite_total
+        rotulo: Limite total
+        tipo: numero
+  - chave: investimentos
+    nome: Investimentos
+    tabela: main.cliente_360.investimentos
+    campos:
+      - campo: perfil_investidor
+        rotulo: Perfil investidor
+        tipo: texto
+      - campo: valor_investido
+        rotulo: Valor investido
+        tipo: numero

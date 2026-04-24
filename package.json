@@ -1,9 +1,9 @@
 {
-  "name": "campaign-databricks-app",
-  "private": true,
-  "version": "2.1.0",
-  "type": "module",
   "scripts": {
-    "build": "node scripts/noop-build.mjs"
-  }
+    "build": "cd frontend && npm install && npm run build",
+    "dev": "cd frontend && npm install && npm run dev",
+    "preview": "cd frontend && npm run preview"
+  },
+  "dependencies": {},
+  "devDependencies": {}
 }
