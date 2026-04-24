@@ -2,7 +2,7 @@
 -- 10 - Carga de dados de campanhas para teste da aplicação
 -- ============================================================
 -- Objetivo:
--- Criar uma massa de campanhas compatível com as tabelas PT-BR atuais.
+-- Criar uma massa de campanhas compatível com os SQLs atuais do repositório.
 --
 -- Executar após:
 -- 00_limpar_schemas.sql
@@ -21,7 +21,7 @@
 -- Limpeza da massa de campanhas de teste
 -- ============================================================
 
-DELETE FROM main.execucao_campanha.campanha_audiencia
+DELETE FROM main.execucao_campanha.campanha_publico
 WHERE id_campanha IN ('CMP-TESTE-001', 'CMP-TESTE-002', 'CMP-TESTE-003', 'CMP-TESTE-004', 'CMP-TESTE-005');
 
 DELETE FROM main.execucao_campanha.campanha_log_execucao
@@ -151,7 +151,7 @@ VALUES
     'Cartões',
     'Aumentar uso de cartão em clientes Exclusive',
     'Oferta de benefício progressivo por gasto mensal',
-    'Campanha ativa para testar audiência materializada e log de execução.',
+    'Campanha ativa para testar público materializado e log de execução.',
     'ATIVO',
     'MENSAL',
     DATE('2026-04-15'),
@@ -238,7 +238,7 @@ VALUES
     array('APP', 'EMAIL', 'PUSH'),
     array('Não impactar clientes bloqueados', 'Respeitar limite de impactos'),
     array('Priorizar clientes Exclusive', 'Priorizar clientes com cartão ativo'),
-    'Campanha ativa para validar execução e audiência.',
+    'Campanha ativa para validar execução e público.',
     current_timestamp(),
     'sistema'
 );
@@ -354,7 +354,7 @@ VALUES
     'CMP-TESTE-001',
     1,
     'TABELA',
-    'main.execucao_campanha.campanha_audiencia',
+    'main.execucao_campanha.campanha_publico',
     'SELECT cpf_cnpj FROM main.fontes_campanha.vw_publico_prime',
     DATE('2026-04-01'),
     DATE('2026-06-30'),
@@ -366,7 +366,7 @@ VALUES
     'CMP-TESTE-005',
     1,
     'TABELA',
-    'main.execucao_campanha.campanha_audiencia',
+    'main.execucao_campanha.campanha_publico',
     'SELECT cpf_cnpj FROM main.fontes_campanha.vw_publico_exclusive',
     DATE('2026-04-15'),
     DATE('2026-07-15'),
@@ -422,17 +422,17 @@ VALUES
 ('CMP-TESTE-005', 'ATIVAR_CAMPANHA', '{"versao":1,"publico_materializado":1}', current_timestamp(), 'sistema');
 
 -- ============================================================
--- Audiência materializada de exemplo
+-- Público materializado de exemplo
 -- ============================================================
 
-INSERT INTO main.execucao_campanha.campanha_audiencia (
+INSERT INTO main.execucao_campanha.campanha_publico (
     id_campanha,
     versao_segmentacao,
     cpf_cnpj,
     data_segmentacao,
     data_inicio_vigencia,
     data_fim_vigencia,
-    status_audiencia,
+    status_publico,
     origem_publico,
     modo_materializacao,
     modo_execucao
@@ -486,7 +486,7 @@ VALUES
     current_timestamp(),
     'LOTE',
     'TABELA',
-    'main.execucao_campanha.campanha_audiencia',
+    'main.execucao_campanha.campanha_publico',
     1,
     NULL,
     'SUCESSO',
@@ -498,18 +498,9 @@ VALUES
     current_timestamp(),
     'LOTE',
     'TABELA',
-    'main.execucao_campanha.campanha_audiencia',
+    'main.execucao_campanha.campanha_publico',
     1,
     NULL,
     'SUCESSO',
     NULL
 );
-
--- ============================================================
--- Consultas rápidas de validação
--- ============================================================
--- SELECT * FROM main.aplicacao_campanhas.campanha_cabecalho ORDER BY id_campanha;
--- SELECT * FROM main.aplicacao_campanhas.campanha_briefing_versao ORDER BY id_campanha, versao_id;
--- SELECT * FROM main.aplicacao_campanhas.campanha_segmentacao_versao ORDER BY id_campanha, versao_id;
--- SELECT * FROM main.aplicacao_campanhas.campanha_ativacao_versao ORDER BY id_campanha, versao_id;
--- SELECT * FROM main.execucao_campanha.campanha_audiencia ORDER BY id_campanha, cpf_cnpj;
