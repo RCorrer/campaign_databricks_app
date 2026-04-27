@@ -26,6 +26,17 @@ from app.controllers import campaign_controller, lead_controller
 app.include_router(campaign_controller.router, prefix="/api/campaigns")
 app.include_router(lead_controller.router, prefix="/api/leads")
 
+@app.get("/api/debug/campaigns")
+def debug_campaigns():
+    """Endpoint de depuração para verificar se a API retorna um array."""
+    from app.dependencies import get_campaign_service
+    service = get_campaign_service()
+    data = service.list_campaigns()
+    # Converte os objetos Pydantic para dict
+    result = [item.model_dump() for item in data]
+    return {"type": str(type(result)), "is_list": isinstance(result, list), "data": result}
+
+
 @app.get("/health")
 def health():
     """Endpoint de saúde para verificar se o servidor está respondendo."""

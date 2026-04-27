@@ -21,8 +21,15 @@ export default function Dashboard() {
 
   useEffect(() => {
     apiClient.get('/api/campaigns')
-      .then(res => setCampaigns(res.data))
-      .catch(console.error)
+      .then(res => {
+        // 🔒 Garante que campaigns seja SEMPRE um array
+        const data = Array.isArray(res.data) ? res.data : []
+        setCampaigns(data)
+      })
+      .catch(err => {
+        console.error('Erro ao buscar campanhas:', err)
+        setCampaigns([])
+      })
       .finally(() => setLoading(false))
   }, [])
 
@@ -35,21 +42,23 @@ export default function Dashboard() {
     })
   }
 
-  const filteredCampaigns = campaigns.filter(c => {
-    const match = (field, value) => !value || (c[field] && c[field].toLowerCase().includes(value.toLowerCase()))
-    const matchDate = (field, value) => {
-      if (!value) return true
-      const campaignDate = c[field] ? c[field].substring(0, 10) : ''
-      return campaignDate === value
-    }
-    return match('nome', filters.nome) &&
-           match('tema', filters.tema) &&
-           match('segmento', filters.segmento) &&
-           match('canal', filters.canal) &&
-           match('status', filters.status) &&
-           matchDate('data_inicio', filters.data_inicio) &&
-           matchDate('data_fim', filters.data_fim)
-  })
+  const filteredCampaigns = Array.isArray(campaigns)
+    ? campaigns.filter(c => {
+        const match = (field, value) => !value || (c[field] && c[field].toLowerCase().includes(value.toLowerCase()))
+        const matchDate = (field, value) => {
+          if (!value) return true
+          const campaignDate = c[field] ? c[field].substring(0, 10) : ''
+          return campaignDate === value
+        }
+        return match('nome', filters.nome) &&
+               match('tema', filters.tema) &&
+               match('segmento', filters.segmento) &&
+               match('canal', filters.canal) &&
+               match('status', filters.status) &&
+               matchDate('data_inicio', filters.data_inicio) &&
+               matchDate('data_fim', filters.data_fim)
+      })
+    : []
 
   return (
     <>
