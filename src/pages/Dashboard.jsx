@@ -26,13 +26,8 @@ export default function Dashboard() {
       .finally(() => setLoading(false))
   }, [])
 
-  const handleCardClick = (id) => {
-    navigate(`/campaign/${id}`)
-  }
-
-  const handleNewCampaign = () => {
-    navigate('/campaign/new')
-  }
+  const handleCardClick = (id) => navigate(`/campaign/${id}`)
+  const handleNewCampaign = () => navigate('/campaign/new')
 
   const clearFilters = () => {
     setFilters({
