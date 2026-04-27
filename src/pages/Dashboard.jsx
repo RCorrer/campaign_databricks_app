@@ -15,7 +15,7 @@ export default function Dashboard() {
     canal: '',
     status: '',
     data_inicio: '',
-    data_fim:'',
+    data_fim: '',
   })
   const navigate = useNavigate()
 
@@ -40,7 +40,6 @@ export default function Dashboard() {
     })
   }
 
-  // Filtering logic
   const filteredCampaigns = campaigns.filter(c => {
     const match = (field, value) => !value || (c[field] && c[field].toLowerCase().includes(value.toLowerCase()))
     const matchDate = (field, value) => {

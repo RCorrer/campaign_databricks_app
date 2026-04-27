@@ -1,5 +1,4 @@
 import { Card, CardContent, Typography, Chip, CardActionArea } from '@mui/material'
-import { format } from 'date-fns' // não incluso, usar alternativa simples
 
 function formatDate(dateStr) {
   if (!dateStr) return ''

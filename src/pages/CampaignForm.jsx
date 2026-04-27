@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import axios from 'axios'
 import {
   Box, TextField, Button, Typography, Paper, Grid, Alert
 } from '@mui/material'
@@ -25,7 +24,7 @@ export default function CampaignForm() {
   const { id } = useParams()
   const isNew = !id
   const [form, setForm] = useState(initialForm)
-  const [editMode, setEditMode] = useState(isNew)  // new = edit, existing = read only initially
+  const [editMode, setEditMode] = useState(isNew)
   const [originalData, setOriginalData] = useState(null)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState(null)
@@ -60,20 +59,6 @@ export default function CampaignForm() {
     return form.nome.trim() !== ''
   }
 
-  const handleCreate = async () => {
-    if (!isFormValid()) return
-    setSaving(true)
-    try {
-      await apiClient.post('/api/campaigns', form)
-      navigate(`/segmentacao/${id}`)  // after creation, go to segmentation (ID returned by API; we don't have it yet, so need to capture)
-      // Since we don't have the ID returned in response if we navigate, we should wait and then navigate using the returned ID
-    } catch (err) {
-      setMessage({ type: 'error', text: 'Erro ao criar campanha' })
-    } finally {
-      setSaving(false)
-    }
-  }
-
   const handleCreateAndGo = async () => {
     if (!isFormValid()) return
     setSaving(true)
@@ -98,15 +83,6 @@ export default function CampaignForm() {
       setMessage({ type: 'error', text: 'Erro ao atualizar campanha' })
     } finally {
       setSaving(false)
-    }
-  }
-
-  const handleEditToggle = () => {
-    if (editMode) {
-      // Cancel editing? Actually button is "Salvar" when editMode true, but we want to save via handleUpdate.
-      // So just return; the save is in another button click.
-    } else {
-      setEditMode(true)
     }
   }
 
