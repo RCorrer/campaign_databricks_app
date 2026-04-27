@@ -3,21 +3,27 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from backend.api.rotas import roteador_api
+from app.controllers import customer_controller, campaign_controller, lead_controller
 
-app = FastAPI(title="Orquestrador de Campanhas", version="4.0.0")
-app.include_router(roteador_api, prefix="/api")
+app = FastAPI()
 
-DIST_DIR = Path("frontend/dist")
-
+DIST_DIR = Path("dist")
 if DIST_DIR.exists():
     assets_dir = DIST_DIR / "assets"
     if assets_dir.exists():
         app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
 
-    @app.get("/{caminho:path}")
-    def servir_frontend(caminho: str):
-        arquivo = DIST_DIR / caminho
-        if arquivo.is_file():
-            return FileResponse(arquivo)
-        return FileResponse(DIST_DIR / "index.html")
+app.include_router(customer_controller.router, prefix="/api/customers")
+app.include_router(campaign_controller.router, prefix="/api/campaigns")
+app.include_router(lead_controller.router, prefix="/api/leads")
+
+@app.get("/")
+def root():
+    return FileResponse(DIST_DIR / "index.html")
+
+@app.get("/{full_path:path}")
+def spa_fallback(full_path: str):
+    target = DIST_DIR / full_path
+    if target.exists() and target.is_file():
+        return FileResponse(target)
+    return FileResponse(DIST_DIR / "index.html")
