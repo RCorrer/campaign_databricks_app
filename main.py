@@ -1,67 +1,71 @@
 import logging
 from pathlib import Path
+
 from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-# Configuração de logging – as mensagens aparecerão nos logs do Databricks App
+from backend.api.routes import api_router
+from backend.core.config import settings
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("crm-cdp")
 
-app = FastAPI()
+app = FastAPI(title=settings.app_name, version=settings.app_version)
 
-DIST_DIR = Path("dist")
-logger.info(f"Dist directory exists: {DIST_DIR.exists()}")
-if DIST_DIR.exists():
-    logger.info(f"Dist contents: {list(DIST_DIR.iterdir())}")
-    assets_dir = DIST_DIR / "assets"
-    if assets_dir.exists():
-        logger.info("Mounting /assets")
-        app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
+# Monta as rotas da API ANTES de qualquer outra coisa
+app.include_router(api_router, prefix='/api')
+
+# Determina qual diretório de frontend usar (escolha UM)
+FRONTEND_DIR = Path(settings.frontend_dir)   # para o vanilla (pasta frontend)
+DIST_DIR = Path('dist')                       # para build React/Vite
+
+# Opção 1: Servindo o frontend vanilla (pasta frontend)
+if FRONTEND_DIR.exists() and (FRONTEND_DIR / 'index.html').exists():
+    logger.info("Usando frontend vanilla da pasta '%s'", FRONTEND_DIR)
+
+    @app.get('/')
+    async def root():
+        return FileResponse(FRONTEND_DIR / 'index.html')
+
+    @app.get('/app.js')
+    async def app_js():
+        return FileResponse(FRONTEND_DIR / 'app.js')
+
+    @app.get('/styles.css')
+    async def styles_css():
+        return FileResponse(FRONTEND_DIR / 'styles.css')
+
+    @app.get('/{full_path:path}')
+    async def spa_fallback(full_path: str, request: Request):
+        # Evita que o fallback capture as rotas da API
+        if request.url.path.startswith('/api'):
+            return None   # já tratado pelo api_router
+        static_file = FRONTEND_DIR / full_path
+        if static_file.exists() and static_file.is_file():
+            return FileResponse(static_file)
+        return FileResponse(FRONTEND_DIR / 'index.html')
+
+# Opção 2: Servindo a build do Vite/React (pasta dist)
+elif DIST_DIR.exists() and (DIST_DIR / 'index.html').exists():
+    logger.info("Usando frontend React buildado da pasta '%s'", DIST_DIR)
+
+    # Monta arquivos estáticos (assets) sob /assets
+    if (DIST_DIR / 'assets').exists():
+        app.mount("/assets", StaticFiles(directory=DIST_DIR / 'assets'), name="assets")
+
+    @app.get('/')
+    async def root():
+        return FileResponse(DIST_DIR / 'index.html')
+
+    @app.get('/{full_path:path}')
+    async def spa_fallback(full_path: str, request: Request):
+        if request.url.path.startswith('/api'):
+            return None
+        static_file = DIST_DIR / full_path
+        if static_file.exists() and static_file.is_file():
+            return FileResponse(static_file)
+        return FileResponse(DIST_DIR / 'index.html')
+
 else:
-    logger.error("DIST_DIR not found! React build missing.")
-
-# Incluir os routers
-from app.controllers import campaign_controller, lead_controller
-app.include_router(campaign_controller.router, prefix="/api/campaigns")
-app.include_router(lead_controller.router, prefix="/api/leads")
-
-@app.get("/api/debug/campaigns")
-def debug_campaigns():
-    """Endpoint de depuração para verificar se a API retorna um array."""
-    from app.dependencies import get_campaign_service
-    service = get_campaign_service()
-    data = service.list_campaigns()
-    # Converte os objetos Pydantic para dict
-    result = [item.model_dump() for item in data]
-    return {"type": str(type(result)), "is_list": isinstance(result, list), "data": result}
-
-
-@app.get("/health")
-def health():
-    """Endpoint de saúde para verificar se o servidor está respondendo."""
-    return {"status": "ok", "dist_exists": DIST_DIR.exists()}
-
-@app.get("/")
-async def root(request: Request):
-    logger.info(f"Serving index.html to {request.client.host}")
-    index_file = DIST_DIR / "index.html"
-    if index_file.exists():
-        logger.info("index.html found")
-        return FileResponse(index_file)
-    else:
-        logger.error("index.html not found!")
-        return HTMLResponse("<h1>index.html missing</h1>", status_code=500)
-
-@app.get("/{full_path:path}")
-async def spa_fallback(request: Request, full_path: str):
-    logger.info(f"SPA fallback for path: {full_path}")
-    target = DIST_DIR / full_path
-    if target.exists() and target.is_file():
-        return FileResponse(target)
-    # Fallback para index.html (importante para React Router)
-    return FileResponse(DIST_DIR / "index.html")
-
-@app.on_event("startup")
-async def startup_event():
-    logger.info("Application startup complete")
+    logger.warning("Nenhum diretório de frontend encontrado. Apenas a API estará disponível.")
