@@ -12,7 +12,12 @@ from app.config import AppConfig
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("crm-cdp")
 
-app = FastAPI(title="Campaign Orchestrator", version="3.1.0")
+app = FastAPI(
+    title="Campaign Orchestrator",
+    version="3.1.0",
+    docs_url="/docs",          # Swagger UI
+    redoc_url="/redoc",        # Documentação alternativa
+)
 
 # Monta as rotas da API ANTES de qualquer outra coisa
 app.include_router(campaign_router, prefix="/api/campaigns")
