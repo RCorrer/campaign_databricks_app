@@ -1,28 +1,29 @@
 import os
 
 class AppConfig:
-    """Configurações centralizadas do aplicativo."""
+    @staticmethod
+    def get_warehouse_id() -> str:
+        val = os.getenv("DATABRICKS_WAREHOUSE_ID")
+        if not val:
+            raise RuntimeError("DATABRICKS_WAREHOUSE_ID não definido")
+        return val
 
-    # Databricks Warehouse ID – deve vir da variável de ambiente
-    databricks_warehouse_id: str = os.getenv("DATABRICKS_WAREHOUSE_ID")
+    @staticmethod
+    def get_catalog() -> str:
+        return os.getenv("UC_CATALOG", "main")
 
-    # Schemas do Unity Catalog
-    uc_catalog: str = "main"
-    uc_publico_alvo_schema: str = "publico_alvo"
-    uc_cliente_360_schema: str = "cliente_360"
-    uc_campanhas_schema: str = "campanhas"
+    @staticmethod
+    def get_schema_publico_alvo() -> str:
+        return os.getenv("UC_SCHEMA_PUBLICO_ALVO", "publico_alvo")
 
-    @property
-    def publico_alvo_namespace(self) -> str:
-        return f"{self.uc_catalog}.{self.uc_publico_alvo_schema}"
+    @staticmethod
+    def get_schema_cliente_360() -> str:
+        return os.getenv("UC_SCHEMA_CLIENTE_360", "cliente_360")
 
-    @property
-    def cliente_360_namespace(self) -> str:
-        return f"{self.uc_catalog}.{self.uc_cliente_360_schema}"
+    @staticmethod
+    def get_schema_campanhas() -> str:
+        return os.getenv("UC_SCHEMA_CAMPANHAS", "campanhas")
 
-    @property
-    def campanhas_namespace(self) -> str:
-        return f"{self.uc_catalog}.{self.uc_campanhas_schema}"
-
-
-settings = AppConfig()
+    @staticmethod
+    def get_schema_leads() -> str:
+        return os.getenv("UC_SCHEMA_LEADS", "leads_campanha")
