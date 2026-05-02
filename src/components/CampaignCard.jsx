@@ -1,31 +1,38 @@
-import { Link } from 'react-router-dom'
+import { Card, CardContent, Typography, Chip, CardActionArea } from '@mui/material'
 
-export default function CampaignCard({ campaign }) {
-  if (!campaign) return null
+function formatDate(dateStr) {
+  if (!dateStr) return ''
+  const dt = new Date(dateStr)
+  return dt.toLocaleDateString('pt-BR')
+}
 
+const statusColors = {
+  'planejada': '#1976d2',
+  'aprovada': '#388e3c',
+  'em execução': '#f57c00',
+  'finalizada': '#7b1fa2',
+  'cancelada': '#d32f2f',
+}
+
+export default function CampaignCard({ campaign, onClick }) {
   return (
-    <article className="card campaign-card">
-      <div className="campaign-card-top">
-        <div>
-          <p className="campaign-code">{campaign.campaign_id}</p>
-          <h3>{campaign.name}</h3>
-        </div>
-        <span className={`status-pill status-${campaign.status?.toLowerCase() || ''}`}>
-          {campaign.status_label}
-        </span>
-      </div>
-      <div className="campaign-grid-info">
-        <div><span>Tema</span><strong>{campaign.theme}</strong></div>
-        <div><span>Objetivo</span><strong>{campaign.objective}</strong></div>
-        <div><span>Vigência</span><strong>{campaign.start_date} a {campaign.end_date}</strong></div>
-        <div><span>Versão</span><strong>v{campaign.version}</strong></div>
-      </div>
-      <p className="muted">{campaign.objective}</p>
-      <div className="campaign-actions">
-        <Link className="button secondary" to={`/campaigns/${campaign.campaign_id}`}>
-          Abrir
-        </Link>
-      </div>
-    </article>
+    <Card variant="outlined" sx={{ minWidth: 280, maxWidth: 320, flex: 1 }}>
+      <CardActionArea onClick={() => onClick(campaign.id_campanha)}>
+        <CardContent>
+          <Typography variant="h6" noWrap>{campaign.nome}</Typography>
+          <Typography variant="body2" color="text.secondary">Tema: {campaign.tema}</Typography>
+          <Typography variant="body2" color="text.secondary">Segmento: {campaign.segmento}</Typography>
+          <Typography variant="body2" color="text.secondary">Canal: {campaign.canal}</Typography>
+          <Chip
+            label={campaign.status}
+            size="small"
+            sx={{ mt: 1, backgroundColor: statusColors[campaign.status] || '#999', color: 'white' }}
+          />
+          <Typography variant="caption" display="block" mt={1}>
+            {formatDate(campaign.data_inicio)} - {formatDate(campaign.data_fim)}
+          </Typography>
+        </CardContent>
+      </CardActionArea>
+    </Card>
   )
 }
