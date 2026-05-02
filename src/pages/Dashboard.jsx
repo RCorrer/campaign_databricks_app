@@ -9,17 +9,20 @@ export default function Dashboard() {
   const [campaigns, setCampaigns] = useState([])
   const [loading, setLoading] = useState(true)
   const [filters, setFilters] = useState({
-    name: '',
-    theme: '',
+    nome: '',
+    tema: '',
+    segmento: '',
+    canal: '',
     status: '',
-    start_date: '',
-    end_date: '',
+    data_inicio: '',
+    data_fim: '',
   })
   const navigate = useNavigate()
 
   useEffect(() => {
     apiClient.get('/api/campaigns')
       .then(res => {
+        // 🔒 Garante que campaigns seja SEMPRE um array
         const data = Array.isArray(res.data) ? res.data : []
         setCampaigns(data)
       })
@@ -34,52 +37,49 @@ export default function Dashboard() {
   const handleNewCampaign = () => navigate('/campaign/new')
 
   const clearFilters = () => {
-    setFilters({ name: '', theme: '', status: '', start_date: '', end_date: '' })
+    setFilters({
+      nome: '', tema: '', segmento: '', canal: '', status: '', data_inicio: '', data_fim: ''
+    })
   }
 
   const filteredCampaigns = Array.isArray(campaigns)
     ? campaigns.filter(c => {
-        const match = (field, value) =>
-          !value || (c[field] && c[field].toLowerCase().includes(value.toLowerCase()))
+        const match = (field, value) => !value || (c[field] && c[field].toLowerCase().includes(value.toLowerCase()))
         const matchDate = (field, value) => {
           if (!value) return true
           const campaignDate = c[field] ? c[field].substring(0, 10) : ''
           return campaignDate === value
         }
-        return (
-          match('name', filters.name) &&
-          match('theme', filters.theme) &&
-          match('status', filters.status) &&
-          matchDate('start_date', filters.start_date) &&
-          matchDate('end_date', filters.end_date)
-        )
+        return match('nome', filters.nome) &&
+               match('tema', filters.tema) &&
+               match('segmento', filters.segmento) &&
+               match('canal', filters.canal) &&
+               match('status', filters.status) &&
+               matchDate('data_inicio', filters.data_inicio) &&
+               matchDate('data_fim', filters.data_fim)
       })
     : []
 
   return (
-    <Box sx={{ display: 'flex' }}>
-      <Sidebar />
-      <Box component="main" sx={{ flexGrow: 1, p: 3 }}>
-        <Typography variant="h4" gutterBottom>
-          Dashboard de Campanhas
-        </Typography>
+    <>
+      <Sidebar filters={filters} onFilterChange={setFilters} onClear={clearFilters} onNewCampaign={handleNewCampaign} />
+      <Box sx={{ flexGrow: 1, p: 3, ml: '260px', mt: '64px' }}>
+        <Typography variant="h4" gutterBottom>Dashboard de Campanhas</Typography>
         {loading ? (
           <CircularProgress />
         ) : (
           <Grid container spacing={2}>
             {filteredCampaigns.map(c => (
-              <Grid item xs={12} sm={6} md={4} key={c.campaign_id}>
+              <Grid item key={c.id_campanha}>
                 <CampaignCard campaign={c} onClick={handleCardClick} />
               </Grid>
             ))}
             {filteredCampaigns.length === 0 && (
-              <Typography variant="body1" sx={{ mt: 2 }}>
-                Nenhuma campanha encontrada.
-              </Typography>
+              <Typography color="text.secondary">Nenhuma campanha encontrada.</Typography>
             )}
           </Grid>
         )}
       </Box>
-    </Box>
+    </>
   )
 }
