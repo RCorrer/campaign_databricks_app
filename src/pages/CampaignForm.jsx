@@ -1,22 +1,15 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import {
-  Box, TextField, Button, Typography, Paper, Grid, Alert
-} from '@mui/material'
+import { Box, TextField, Button, Typography, Paper, Grid, Alert } from '@mui/material'
 import apiClient from '../api/client'
 
 const initialForm = {
-  nome: '',
-  tema: '',
-  segmento: '',
-  objetivo: '',
-  estrategia: '',
-  canal: '',
-  data_inicio: '',
-  data_fim: '',
-  publico_alvo: '',
-  regras_inclusao: '',
-  regras_exclusao: '',
+  name: '',
+  theme: '',
+  objective: '',
+  strategy: '',
+  start_date: '',
+  end_date: '',
   status: 'planejada',
 }
 
@@ -37,8 +30,8 @@ export default function CampaignForm() {
           const data = res.data
           const formatted = {
             ...data,
-            data_inicio: data.data_inicio ? data.data_inicio.substring(0, 10) : '',
-            data_fim: data.data_fim ? data.data_fim.substring(0, 10) : '',
+            start_date: data.start_date ? data.start_date.substring(0, 10) : '',
+            end_date: data.end_date ? data.end_date.substring(0, 10) : '',
           }
           setForm(formatted)
           setOriginalData(formatted)
@@ -56,7 +49,7 @@ export default function CampaignForm() {
   }
 
   const isFormValid = () => {
-    return form.nome.trim() !== ''
+    return form.name.trim() !== ''
   }
 
   const handleCreateAndGo = async () => {
@@ -64,8 +57,8 @@ export default function CampaignForm() {
     setSaving(true)
     try {
       const res = await apiClient.post('/api/campaigns', form)
-      const newId = res.data.id_campanha
-      navigate(`/segmentacao/${newId}`)
+      const newId = res.data.campaign_id
+      navigate(`/campaign/${newId}`)
     } catch (err) {
       setMessage({ type: 'error', text: 'Erro ao criar campanha' })
       setSaving(false)
@@ -86,59 +79,93 @@ export default function CampaignForm() {
     }
   }
 
-  const handleSegmentar = () => {
-    navigate(`/segmentacao/${id}`)
-  }
-
-  const allFieldsFilled = () => {
-    return form.nome && form.tema && form.segmento && form.canal && form.status
-  }
-
   return (
-    <Box sx={{ p: 3, ml: '260px', mt: '64px', width: '100%' }}>
-      <Paper sx={{ p: 4, maxWidth: 800, mx: 'auto' }}>
+    <Box sx={{ maxWidth: 600, mx: 'auto', mt: 4 }}>
+      <Paper sx={{ p: 3 }}>
         <Typography variant="h5" gutterBottom>
           {isNew ? 'Nova Campanha' : `Campanha #${id}`}
         </Typography>
-
-        {message && <Alert severity={message.type} sx={{ mb: 2 }}>{message.text}</Alert>}
-
+        {message && (
+          <Alert severity={message.type} sx={{ mb: 2 }}>
+            {message.text}
+          </Alert>
+        )}
         <Grid container spacing={2}>
-          <Grid item xs={12} sm={6}>
-            <TextField name="nome" label="Nome" value={form.nome} onChange={handleChange} fullWidth disabled={!editMode} required />
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <TextField name="tema" label="Tema" value={form.tema} onChange={handleChange} fullWidth disabled={!editMode} />
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <TextField name="segmento" label="Segmento" value={form.segmento} onChange={handleChange} fullWidth disabled={!editMode} />
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <TextField name="objetivo" label="Objetivo" value={form.objetivo} onChange={handleChange} fullWidth disabled={!editMode} />
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <TextField name="estrategia" label="Estratégia" value={form.estrategia} onChange={handleChange} fullWidth disabled={!editMode} multiline />
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <TextField name="canal" label="Canal" value={form.canal} onChange={handleChange} fullWidth disabled={!editMode} />
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <TextField name="data_inicio" label="Data Início" type="date" value={form.data_inicio} onChange={handleChange} fullWidth disabled={!editMode} InputLabelProps={{ shrink: true }} />
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <TextField name="data_fim" label="Data Fim" type="date" value={form.data_fim} onChange={handleChange} fullWidth disabled={!editMode} InputLabelProps={{ shrink: true }} />
+          <Grid item xs={12}>
+            <TextField
+              fullWidth
+              label="Nome"
+              name="name"
+              value={form.name}
+              onChange={handleChange}
+              disabled={!editMode}
+            />
           </Grid>
           <Grid item xs={12}>
-            <TextField name="publico_alvo" label="Público Alvo" value={form.publico_alvo} onChange={handleChange} fullWidth disabled={!editMode} multiline />
+            <TextField
+              fullWidth
+              label="Tema"
+              name="theme"
+              value={form.theme}
+              onChange={handleChange}
+              disabled={!editMode}
+            />
           </Grid>
-          <Grid item xs={12} sm={6}>
-            <TextField name="regras_inclusao" label="Regras Inclusão" value={form.regras_inclusao} onChange={handleChange} fullWidth disabled={!editMode} multiline />
+          <Grid item xs={12}>
+            <TextField
+              fullWidth
+              label="Objetivo"
+              name="objective"
+              value={form.objective}
+              onChange={handleChange}
+              disabled={!editMode}
+            />
           </Grid>
-          <Grid item xs={12} sm={6}>
-            <TextField name="regras_exclusao" label="Regras Exclusão" value={form.regras_exclusao} onChange={handleChange} fullWidth disabled={!editMode} multiline />
+          <Grid item xs={12}>
+            <TextField
+              fullWidth
+              label="Estratégia"
+              name="strategy"
+              value={form.strategy}
+              onChange={handleChange}
+              disabled={!editMode}
+            />
           </Grid>
-          <Grid item xs={12} sm={6}>
-            <TextField name="status" label="Status" value={form.status} onChange={handleChange} fullWidth disabled={!editMode} select SelectProps={{ native: true }}>
+          <Grid item xs={6}>
+            <TextField
+              fullWidth
+              type="date"
+              label="Data Início"
+              name="start_date"
+              value={form.start_date}
+              onChange={handleChange}
+              disabled={!editMode}
+              InputLabelProps={{ shrink: true }}
+            />
+          </Grid>
+          <Grid item xs={6}>
+            <TextField
+              fullWidth
+              type="date"
+              label="Data Fim"
+              name="end_date"
+              value={form.end_date}
+              onChange={handleChange}
+              disabled={!editMode}
+              InputLabelProps={{ shrink: true }}
+            />
+          </Grid>
+          <Grid item xs={12}>
+            <TextField
+              fullWidth
+              select
+              label="Status"
+              name="status"
+              value={form.status}
+              onChange={handleChange}
+              disabled={!editMode}
+              SelectProps={{ native: true }}
+            >
               <option value="planejada">Planejada</option>
               <option value="aprovada">Aprovada</option>
               <option value="em execução">Em Execução</option>
@@ -147,26 +174,20 @@ export default function CampaignForm() {
             </TextField>
           </Grid>
         </Grid>
-
-        <Box sx={{ mt: 4, display: 'flex', gap: 2 }}>
+        <Box sx={{ mt: 2, display: 'flex', gap: 1 }}>
           {isNew ? (
-            <Button variant="contained" onClick={handleCreateAndGo} disabled={!allFieldsFilled() || saving} color="primary">
+            <Button variant="contained" onClick={handleCreateAndGo} disabled={saving}>
               Criar Campanha
             </Button>
           ) : (
             <>
               {editMode ? (
-                <Button variant="contained" onClick={handleUpdate} disabled={saving} color="primary">
+                <Button variant="contained" onClick={handleUpdate} disabled={saving}>
                   Salvar
                 </Button>
               ) : (
-                <Button variant="outlined" onClick={() => setEditMode(true)} color="secondary">
+                <Button variant="outlined" onClick={() => setEditMode(true)}>
                   Editar
-                </Button>
-              )}
-              {!editMode && (
-                <Button variant="contained" onClick={handleSegmentar} color="success">
-                  Segmentar
                 </Button>
               )}
             </>
